@@ -1,0 +1,11 @@
+func square(x)
+    return x * x
+end
+let value = 9
+say "square = " + square(value)
+execute
+clear
+let name = "PyPy"
+say upper(name)
+execute
+exit

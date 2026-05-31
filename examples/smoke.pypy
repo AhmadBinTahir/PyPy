@@ -1,0 +1,3 @@
+say "smoke"
+let x = 2 + 3
+say x

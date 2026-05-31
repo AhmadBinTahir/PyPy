@@ -1,0 +1,17 @@
+say "BODMAS and algebra demo"
+say "-----------------------"
+
+say "2 + 3 * 4 = " + (2 + 3 * 4)
+say "(2 + 3) * 4 = " + ((2 + 3) * 4)
+say "2 + 3 * 4 ^ 2 = " + (2 + 3 * 4 ^ 2)
+say "(2 + 3 * 4) ^ 2 = " + ((2 + 3 * 4) ^ 2)
+say "100 / 5 * 2 = " + (100 / 5 * 2)
+say "100 / (5 * 2) = " + (100 / (5 * 2))
+
+let x = 4
+let y = 3 * x ^ 2 + 2 * x - 5
+say "For y = 3x^2 + 2x - 5 and x = 4, y = " + y
+
+say "linear_y(2, 5, 3) means y = 2x + 3 at x = 5: " + linear_y(2, 5, 3)
+say "solve_linear(2, -10) solves 2x - 10 = 0: " + solve_linear(2, -10)
+say "quadratic_roots(1, -5, 6) solves x^2 - 5x + 6 = 0: " + quadratic_roots(1, -5, 6)

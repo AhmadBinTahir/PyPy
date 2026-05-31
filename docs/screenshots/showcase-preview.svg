@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="520" viewBox="0 0 920 520" role="img" aria-label="PyPy showcase terminal preview">
+  <rect width="920" height="520" fill="#101418"/>
+  <rect x="36" y="34" width="848" height="452" rx="8" fill="#151b22" stroke="#33404d"/>
+  <rect x="36" y="34" width="848" height="42" rx="8" fill="#202833"/>
+  <circle cx="62" cy="55" r="6" fill="#ff5f57"/>
+  <circle cx="84" cy="55" r="6" fill="#ffbd2e"/>
+  <circle cx="106" cy="55" r="6" fill="#28c840"/>
+  <text x="132" y="60" fill="#c9d1d9" font-family="Consolas, 'Courier New', monospace" font-size="15">pypy_language.exe examples\showcase.pypy</text>
+  <text x="58" y="112" fill="#dbe7f3" font-family="Consolas, 'Courier New', monospace" font-size="17">
+    <tspan x="58" dy="0">PyPy language showcase</tspan>
+    <tspan x="58" dy="28">----------------------</tspan>
+    <tspan x="58" dy="28">Hello, STUDENT</tspan>
+    <tspan x="58" dy="28">Score: 87 Grade: B</tspan>
+    <tspan x="58" dy="28">Factorial 6 = 720</tspan>
+    <tspan x="58" dy="28">Average marks = 79.75</tspan>
+    <tspan x="58" dy="28">Board diagonal: X O X</tspan>
+    <tspan x="58" dy="28">File content:</tspan>
+    <tspan x="58" dy="28">Created by PyPy</tspan>
+    <tspan x="58" dy="28">Total marks: 319</tspan>
+    <tspan x="58" dy="28"></tspan>
+    <tspan x="58" dy="28">repeat block works</tspan>
+    <tspan x="58" dy="28">repeat block works</tspan>
+    <tspan x="58" dy="28">repeat block works</tspan>
+  </text>
+</svg>

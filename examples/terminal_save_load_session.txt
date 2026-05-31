@@ -1,0 +1,7 @@
+say "saved terminal program"
+save saved_from_terminal.pypy
+clear
+load saved_from_terminal.pypy
+show
+execute
+exit

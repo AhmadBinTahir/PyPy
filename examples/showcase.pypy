@@ -1,0 +1,71 @@
+# PyPy showcase program
+# Run with: pypy_language examples\showcase.pypy
+
+func factorial(n)
+    if n < 0
+        return "negative factorial is not allowed"
+    end
+
+    let answer = 1
+    while n > 1
+        let answer = answer * n
+        let n = n - 1
+    end
+    return answer
+end
+
+func grade(score)
+    if score >= 90
+        return "A"
+    else
+        if score >= 80
+            return "B"
+        else
+            if score >= 70
+                return "C"
+            else
+                return "Needs practice"
+            end
+        end
+    end
+end
+
+say "PyPy language showcase"
+say "----------------------"
+
+let name = "student"
+let score = 87
+say "Hello, " + upper(name)
+say "Score: " + score + " Grade: " + grade(score)
+say "Factorial 6 = " + factorial(6)
+
+array marks[4]
+set marks[0] = 73
+set marks[1] = 88
+set marks[2] = 91
+set marks[3] = 67
+
+let i = 0
+let total = 0
+while i < 4
+    let total = total + marks[i]
+    let i = i + 1
+end
+say "Average marks = " + (total / 4)
+
+matrix board[3][3]
+set board[0][0] = "X"
+set board[1][1] = "O"
+set board[2][2] = "X"
+say "Board diagonal: " + board[0][0] + " " + board[1][1] + " " + board[2][2]
+
+filewrite "pypy_output.txt", "Created by PyPy\n"
+fileappend "pypy_output.txt", "Total marks: " + total + "\n"
+if fileexists("pypy_output.txt")
+    say "File content:"
+    say fileread("pypy_output.txt")
+end
+
+repeat 3
+    say "repeat block works"
+end

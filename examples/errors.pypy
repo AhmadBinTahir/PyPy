@@ -1,0 +1,19 @@
+# Uncomment one block at a time to see PyPy's negative checks.
+
+# Unknown variable:
+# say missingName
+
+# Divide by zero:
+# say 10 / 0
+
+# Array bounds:
+# array items[2]
+# set items[3] = 99
+
+# Matrix dimensions:
+# matrix impossible[50][50]
+
+# Invalid conversion:
+# say number("abc")
+
+say "Open examples/errors.pypy and uncomment an error case."

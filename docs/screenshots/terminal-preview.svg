@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="440" viewBox="0 0 920 440" role="img" aria-label="PyPy buffered terminal mode preview">
+  <rect width="920" height="440" fill="#0f1419"/>
+  <rect x="36" y="34" width="848" height="372" rx="8" fill="#151b22" stroke="#33404d"/>
+  <rect x="36" y="34" width="848" height="42" rx="8" fill="#202833"/>
+  <circle cx="62" cy="55" r="6" fill="#ff5f57"/>
+  <circle cx="84" cy="55" r="6" fill="#ffbd2e"/>
+  <circle cx="106" cy="55" r="6" fill="#28c840"/>
+  <text x="132" y="60" fill="#c9d1d9" font-family="Consolas, 'Courier New', monospace" font-size="15">pypy_language.exe --terminal</text>
+  <text x="58" y="110" fill="#dbe7f3" font-family="Consolas, 'Courier New', monospace" font-size="16">
+    <tspan x="58" dy="0">PyPy Terminal</tspan>
+    <tspan x="58" dy="26">Mode: buffered. Type PyPy code, then type execute to run it all at once.</tspan>
+    <tspan x="58" dy="30" fill="#85d6ff">pypy-buffer&gt;</tspan><tspan fill="#dbe7f3"> func square(x)</tspan>
+    <tspan x="58" dy="26" fill="#85d6ff">pypy-buffer&gt;</tspan><tspan fill="#dbe7f3">     return x * x</tspan>
+    <tspan x="58" dy="26" fill="#85d6ff">pypy-buffer&gt;</tspan><tspan fill="#dbe7f3"> end</tspan>
+    <tspan x="58" dy="26" fill="#85d6ff">pypy-buffer&gt;</tspan><tspan fill="#dbe7f3"> let value = 9</tspan>
+    <tspan x="58" dy="26" fill="#85d6ff">pypy-buffer&gt;</tspan><tspan fill="#dbe7f3"> say "square = " + square(value)</tspan>
+    <tspan x="58" dy="26" fill="#85d6ff">pypy-buffer&gt;</tspan><tspan fill="#dbe7f3"> execute</tspan>
+    <tspan x="58" dy="30" fill="#c7f3c1">square = 81</tspan>
+    <tspan x="58" dy="30" fill="#85d6ff">pypy-buffer&gt;</tspan><tspan fill="#dbe7f3"> exit</tspan>
+  </text>
+</svg>

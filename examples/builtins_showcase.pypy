@@ -1,0 +1,37 @@
+say "Built-in function showcase"
+say "--------------------------"
+
+let raw = "  PyPy Language  "
+say "strip: [" + strip(raw) + "]"
+say "upper: " + upper(raw)
+say "lower: " + lower(raw)
+say "len: " + len(raw)
+say "substr: " + substr(raw, 2, 4)
+say "contains Language: " + contains(raw, "Language")
+say "find Py: " + find(raw, "Py")
+say "replace: " + replace(raw, "Language", "Code")
+say "repeattext: " + repeattext("*", 8)
+say "charat: " + charat("ABC", 1)
+say "ord/chr: " + ord("A") + " " + chr(66)
+
+say "number: " + number("45.5")
+say "int: " + int("45.9")
+say "float: " + float("2.25")
+say "str: " + str(123)
+say "bool empty: " + bool("")
+say "type: " + type(99)
+
+say "abs: " + abs(-12)
+say "min/max: " + min(3, 9) + " " + max(3, 9)
+say "clamp: " + clamp(50, 0, 10)
+say "floor/ceil/round: " + floor(3.8) + " " + ceil(3.1) + " " + round(3.5)
+say "sqrt/pow: " + sqrt(81) + " " + pow(2, 8)
+
+say "seed: " + seed(7)
+say "randint: " + randint(1, 10)
+say "rand: " + rand()
+
+filewrite "builtins_output.txt", "one\ntwo\nthree"
+say "fileexists: " + fileexists("builtins_output.txt")
+say "filesize: " + filesize("builtins_output.txt")
+say "linecount: " + linecount("builtins_output.txt")

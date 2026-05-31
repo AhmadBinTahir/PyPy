@@ -1,0 +1,12 @@
+let name = input("Name: ")
+let score = number(input("Score: "))
+say "Result for " + name + ": " + score
+if score >= 50
+    say "pass"
+else
+    say "fail"
+end
+execute
+Zain
+76
+exit

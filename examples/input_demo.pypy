@@ -1,0 +1,9 @@
+let name = input("Enter your name: ")
+let age = number(input("Enter your age: "))
+
+say "Hello, " + name
+if age >= 18
+    say "You are an adult."
+else
+    say "You are under 18."
+end

@@ -1,0 +1,3 @@
+array values[2]
+set values[0] = "ok"
+set values[2] = "not ok"

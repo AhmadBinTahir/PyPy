@@ -1,0 +1,103 @@
+say "PyPy Hotel Management System"
+say "============================"
+
+if not fileexists("hotel_guests.db")
+    filewrite "hotel_guests.db", "GUEST_ID|NAME|PHONE|CITY\n"
+end
+
+if not fileexists("hotel_bookings.db")
+    filewrite "hotel_bookings.db", "BOOKING_ID|GUEST|ROOM|NIGHTS|RATE|SUBTOTAL|TAX|TOTAL|STATUS\n"
+end
+
+if not fileexists("hotel_payments.db")
+    filewrite "hotel_payments.db", "BOOKING_ID|GUEST|AMOUNT|METHOD|STATUS\n"
+end
+
+let running = 1
+while running == 1
+    say ""
+    say "1. Add guest"
+    say "2. Reserve room"
+    say "3. Checkout / payment"
+    say "4. View database files"
+    say "5. Hotel report"
+    say "6. Exit"
+    say "7. Reset database"
+
+    let choice = input("Choose option: ")
+
+    if choice == "1"
+        let guestId = "G" + randint(1000, 9999)
+        let name = input("Guest name: ")
+        let phone = input("Phone: ")
+        let city = input("City: ")
+        fileappend "hotel_guests.db", guestId + "|" + name + "|" + phone + "|" + city + "\n"
+        say "Saved guest " + guestId
+    else
+        if choice == "2"
+            let bookingId = "B" + randint(10000, 99999)
+            let guest = input("Guest name: ")
+            let room = input("Room number: ")
+            let nights = number(input("Nights: "))
+            let rate = number(input("Rate per night: "))
+            let subtotal = nights * rate
+            let tax = round(subtotal * 0.15)
+            let total = subtotal + tax
+            fileappend "hotel_bookings.db", bookingId + "|" + guest + "|" + room + "|" + nights + "|" + rate + "|" + subtotal + "|" + tax + "|" + total + "|RESERVED\n"
+            say "Reservation saved."
+            say "Booking: " + bookingId
+            say "Subtotal: " + subtotal
+            say "Tax: " + tax
+            say "Total: " + total
+        else
+            if choice == "3"
+                let bookingId = input("Booking ID: ")
+                let guest = input("Guest name: ")
+                let amount = number(input("Amount paid: "))
+                let method = input("Payment method: ")
+                fileappend "hotel_payments.db", bookingId + "|" + guest + "|" + amount + "|" + method + "|PAID\n"
+                say "Payment saved for " + bookingId
+            else
+                if choice == "4"
+                    say ""
+                    say "--- Guests DB ---"
+                    say fileread("hotel_guests.db")
+                    say "--- Bookings DB ---"
+                    say fileread("hotel_bookings.db")
+                    say "--- Payments DB ---"
+                    say fileread("hotel_payments.db")
+                else
+                    if choice == "5"
+                        say ""
+                        say "Hotel report"
+                        say "Guests file lines: " + linecount("hotel_guests.db")
+                        say "Bookings file lines: " + linecount("hotel_bookings.db")
+                        say "Payments file lines: " + linecount("hotel_payments.db")
+                        say "Guest DB size: " + filesize("hotel_guests.db")
+                        say "Booking DB size: " + filesize("hotel_bookings.db")
+                        say "Payment DB size: " + filesize("hotel_payments.db")
+                    else
+                        if choice == "6"
+                            let running = 0
+                            say "Hotel data saved. Goodbye."
+                        else
+                            if choice == "7"
+                                let confirm = input("Type YES to reset all hotel data: ")
+                                if confirm == "YES"
+                                    filewrite "hotel_guests.db", "GUEST_ID|NAME|PHONE|CITY\n"
+                                    filewrite "hotel_bookings.db", "BOOKING_ID|GUEST|ROOM|NIGHTS|RATE|SUBTOTAL|TAX|TOTAL|STATUS\n"
+                                    filewrite "hotel_payments.db", "BOOKING_ID|GUEST|AMOUNT|METHOD|STATUS\n"
+                                    say "Database reset complete."
+                                else
+                                    say "Reset cancelled."
+                                end
+                            else
+                                say "Invalid option."
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
