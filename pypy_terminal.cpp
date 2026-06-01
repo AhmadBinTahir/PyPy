@@ -34,16 +34,20 @@ void printUsage()
 bool runScript(string path)
 {
     Interpreter interpreter;
-    if (!interpreter.loadFile(path))
+    initInterpreter(&interpreter);
+    if (!interpreterLoadFile(&interpreter, path))
     {
         printPyPyError(&interpreter);
+        freeInterpreter(&interpreter);
         return false;
     }
-    if (!interpreter.run())
+    if (!interpreterRun(&interpreter))
     {
         printPyPyError(&interpreter);
+        freeInterpreter(&interpreter);
         return false;
     }
+    freeInterpreter(&interpreter);
     return true;
 }
 
@@ -59,11 +63,13 @@ void copyBufferToProgram(Interpreter *interpreter, string buffer[], int count)
 void runBufferedProgram(string buffer[], int count)
 {
     Interpreter program;
+    initInterpreter(&program);
     copyBufferToProgram(&program, buffer, count);
-    if (!program.run())
+    if (!interpreterRun(&program))
     {
         printPyPyError(&program);
     }
+    freeInterpreter(&program);
 }
 
 void printTerminalHelp()

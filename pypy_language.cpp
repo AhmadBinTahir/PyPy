@@ -97,8 +97,8 @@ struct ExecResult
     Value value;
 };
 
-class Environment;
-class Interpreter;
+struct Environment;
+struct Interpreter;
 
 Value makeNull()
 {
@@ -422,190 +422,195 @@ double manualSqrt(double value, bool *ok)
     return guess;
 }
 
-class Environment
+struct Environment
 {
-public:
     Variable *vars;
     Environment *parent;
-
-    Environment(Environment *parentEnv)
-    {
-        parent = parentEnv;
-        vars = new Variable[MAX_VARS];
-        for (int i = 0; i < MAX_VARS; i++)
-        {
-            vars[i].used = false;
-            vars[i].name = "";
-            vars[i].kind = VAR_SCALAR;
-            vars[i].rows = 0;
-            vars[i].cols = 0;
-            vars[i].scalar = makeNull();
-            vars[i].cells = new Value[MAX_CELLS];
-            for (int j = 0; j < MAX_CELLS; j++)
-            {
-                vars[i].cells[j] = makeNull();
-            }
-        }
-    }
-
-    ~Environment()
-    {
-        for (int i = 0; i < MAX_VARS; i++)
-        {
-            delete[] vars[i].cells;
-        }
-        delete[] vars;
-    }
-
-    Variable *findLocal(string name)
-    {
-        for (int i = 0; i < MAX_VARS; i++)
-        {
-            if (vars[i].used && vars[i].name == name)
-            {
-                return &vars[i];
-            }
-        }
-        return NULL;
-    }
-
-    Variable *findAny(string name)
-    {
-        Variable *local = findLocal(name);
-        if (local != NULL)
-        {
-            return local;
-        }
-        if (parent != NULL)
-        {
-            return parent->findAny(name);
-        }
-        return NULL;
-    }
-
-    Variable *allocate(string name, ErrorState *error, int line)
-    {
-        if (!isValidIdentifier(name))
-        {
-            fail(error, line, "Invalid identifier '" + name + "'.");
-            return NULL;
-        }
-        Variable *existing = findLocal(name);
-        if (existing != NULL)
-        {
-            return existing;
-        }
-        for (int i = 0; i < MAX_VARS; i++)
-        {
-            if (!vars[i].used)
-            {
-                vars[i].used = true;
-                vars[i].name = name;
-                vars[i].kind = VAR_SCALAR;
-                vars[i].rows = 0;
-                vars[i].cols = 0;
-                vars[i].scalar = makeNull();
-                for (int j = 0; j < MAX_CELLS; j++)
-                {
-                    vars[i].cells[j] = makeNull();
-                }
-                return &vars[i];
-            }
-        }
-        fail(error, line, "Variable table is full. Maximum variables per scope is " + numberToString(MAX_VARS) + ".");
-        return NULL;
-    }
-
-    void declareScalar(string name, Value value, ErrorState *error, int line)
-    {
-        Variable *var = allocate(name, error, line);
-        if (var == NULL)
-        {
-            return;
-        }
-        var->kind = VAR_SCALAR;
-        var->rows = 0;
-        var->cols = 0;
-        var->scalar = value;
-    }
-
-    void assignScalar(string name, Value value, ErrorState *error, int line)
-    {
-        if (!isValidIdentifier(name))
-        {
-            fail(error, line, "Invalid identifier '" + name + "'.");
-            return;
-        }
-        Variable *var = findAny(name);
-        if (var == NULL)
-        {
-            var = allocate(name, error, line);
-        }
-        if (var == NULL)
-        {
-            return;
-        }
-        if (var->kind != VAR_SCALAR)
-        {
-            fail(error, line, "'" + name + "' is not a scalar variable.");
-            return;
-        }
-        var->scalar = value;
-    }
-
-    void declareArray(string name, int size, ErrorState *error, int line)
-    {
-        if (size < 1 || size > MAX_CELLS)
-        {
-            fail(error, line, "Array size must be between 1 and " + numberToString(MAX_CELLS) + ".");
-            return;
-        }
-        Variable *var = allocate(name, error, line);
-        if (var == NULL)
-        {
-            return;
-        }
-        var->kind = VAR_ARRAY;
-        var->rows = size;
-        var->cols = 1;
-        var->scalar = makeNull();
-        for (int i = 0; i < size; i++)
-        {
-            var->cells[i] = makeNull();
-        }
-    }
-
-    void declareMatrix(string name, int rows, int cols, ErrorState *error, int line)
-    {
-        if (rows < 1 || cols < 1)
-        {
-            fail(error, line, "Matrix dimensions must be positive.");
-            return;
-        }
-        if (rows * cols > MAX_CELLS)
-        {
-            fail(error, line, "Matrix has too many cells. Maximum total cells is " + numberToString(MAX_CELLS) + ".");
-            return;
-        }
-        Variable *var = allocate(name, error, line);
-        if (var == NULL)
-        {
-            return;
-        }
-        var->kind = VAR_MATRIX;
-        var->rows = rows;
-        var->cols = cols;
-        var->scalar = makeNull();
-        for (int i = 0; i < rows * cols; i++)
-        {
-            var->cells[i] = makeNull();
-        }
-    }
 };
 
-class ExpressionParser
+void initEnvironment(Environment *env, Environment *parentEnv)
 {
-public:
+    env->parent = parentEnv;
+    env->vars = new Variable[MAX_VARS];
+    for (int i = 0; i < MAX_VARS; i++)
+    {
+        env->vars[i].used = false;
+        env->vars[i].name = "";
+        env->vars[i].kind = VAR_SCALAR;
+        env->vars[i].rows = 0;
+        env->vars[i].cols = 0;
+        env->vars[i].scalar = makeNull();
+        env->vars[i].cells = new Value[MAX_CELLS];
+        for (int j = 0; j < MAX_CELLS; j++)
+        {
+            env->vars[i].cells[j] = makeNull();
+        }
+    }
+}
+
+void freeEnvironment(Environment *env)
+{
+    if (env->vars == NULL)
+    {
+        return;
+    }
+    for (int i = 0; i < MAX_VARS; i++)
+    {
+        delete[] env->vars[i].cells;
+        env->vars[i].cells = NULL;
+    }
+    delete[] env->vars;
+    env->vars = NULL;
+}
+
+Variable *envFindLocal(Environment *env, string name)
+{
+    for (int i = 0; i < MAX_VARS; i++)
+    {
+        if (env->vars[i].used && env->vars[i].name == name)
+        {
+            return &env->vars[i];
+        }
+    }
+    return NULL;
+}
+
+Variable *envFindAny(Environment *env, string name)
+{
+    Variable *local = envFindLocal(env, name);
+    if (local != NULL)
+    {
+        return local;
+    }
+    if (env->parent != NULL)
+    {
+        return envFindAny(env->parent, name);
+    }
+    return NULL;
+}
+
+Variable *envAllocate(Environment *env, string name, ErrorState *error, int line)
+{
+    if (!isValidIdentifier(name))
+    {
+        fail(error, line, "Invalid identifier '" + name + "'.");
+        return NULL;
+    }
+    Variable *existing = envFindLocal(env, name);
+    if (existing != NULL)
+    {
+        return existing;
+    }
+    for (int i = 0; i < MAX_VARS; i++)
+    {
+        if (!env->vars[i].used)
+        {
+            env->vars[i].used = true;
+            env->vars[i].name = name;
+            env->vars[i].kind = VAR_SCALAR;
+            env->vars[i].rows = 0;
+            env->vars[i].cols = 0;
+            env->vars[i].scalar = makeNull();
+            for (int j = 0; j < MAX_CELLS; j++)
+            {
+                env->vars[i].cells[j] = makeNull();
+            }
+            return &env->vars[i];
+        }
+    }
+    fail(error, line, "Variable table is full. Maximum variables per scope is " + numberToString(MAX_VARS) + ".");
+    return NULL;
+}
+
+void envDeclareScalar(Environment *env, string name, Value value, ErrorState *error, int line)
+{
+    Variable *var = envAllocate(env, name, error, line);
+    if (var == NULL)
+    {
+        return;
+    }
+    var->kind = VAR_SCALAR;
+    var->rows = 0;
+    var->cols = 0;
+    var->scalar = value;
+}
+
+void envAssignScalar(Environment *env, string name, Value value, ErrorState *error, int line)
+{
+    if (!isValidIdentifier(name))
+    {
+        fail(error, line, "Invalid identifier '" + name + "'.");
+        return;
+    }
+    Variable *var = envFindAny(env, name);
+    if (var == NULL)
+    {
+        var = envAllocate(env, name, error, line);
+    }
+    if (var == NULL)
+    {
+        return;
+    }
+    if (var->kind != VAR_SCALAR)
+    {
+        fail(error, line, "'" + name + "' is not a scalar variable.");
+        return;
+    }
+    var->scalar = value;
+}
+
+void envDeclareArray(Environment *env, string name, int size, ErrorState *error, int line)
+{
+    if (size < 1 || size > MAX_CELLS)
+    {
+        fail(error, line, "Array size must be between 1 and " + numberToString(MAX_CELLS) + ".");
+        return;
+    }
+    Variable *var = envAllocate(env, name, error, line);
+    if (var == NULL)
+    {
+        return;
+    }
+    var->kind = VAR_ARRAY;
+    var->rows = size;
+    var->cols = 1;
+    var->scalar = makeNull();
+    for (int i = 0; i < size; i++)
+    {
+        var->cells[i] = makeNull();
+    }
+}
+
+void envDeclareMatrix(Environment *env, string name, int rows, int cols, ErrorState *error, int line)
+{
+    if (rows < 1 || cols < 1)
+    {
+        fail(error, line, "Matrix dimensions must be positive.");
+        return;
+    }
+    if (rows * cols > MAX_CELLS)
+    {
+        fail(error, line, "Matrix has too many cells. Maximum total cells is " + numberToString(MAX_CELLS) + ".");
+        return;
+    }
+    Variable *var = envAllocate(env, name, error, line);
+    if (var == NULL)
+    {
+        return;
+    }
+    var->kind = VAR_MATRIX;
+    var->rows = rows;
+    var->cols = cols;
+    var->scalar = makeNull();
+    for (int i = 0; i < rows * cols; i++)
+    {
+        var->cells[i] = makeNull();
+    }
+}
+
+
+struct ExpressionParser
+{
     Token tokens[MAX_TOKENS];
     int count;
     int pos;
@@ -613,1363 +618,1569 @@ public:
     ErrorState *error;
     Environment *env;
     Interpreter *interpreter;
-
-    ExpressionParser(ErrorState *err, Environment *environment, Interpreter *owner, int lineNumber)
-    {
-        count = 0;
-        pos = 0;
-        line = lineNumber;
-        error = err;
-        env = environment;
-        interpreter = owner;
-    }
-
-    bool tokenize(string expression)
-    {
-        count = 0;
-        pos = 0;
-        int i = 0;
-        while (i < (int)expression.length())
-        {
-            char ch = expression[i];
-            if (charIsSpace(ch))
-            {
-                i++;
-                continue;
-            }
-            if (count >= MAX_TOKENS - 1)
-            {
-                fail(error, line, "Expression is too long.");
-                return false;
-            }
-            if (charIsDigit(ch) || (ch == '.' && i + 1 < (int)expression.length() && charIsDigit(expression[i + 1])))
-            {
-                int start = i;
-                bool dotSeen = false;
-                while (i < (int)expression.length() && (charIsDigit(expression[i]) || expression[i] == '.'))
-                {
-                    if (expression[i] == '.')
-                    {
-                        if (dotSeen)
-                        {
-                            fail(error, line, "Invalid number literal.");
-                            return false;
-                        }
-                        dotSeen = true;
-                    }
-                    i++;
-                }
-                tokens[count].type = TOK_NUMBER;
-                tokens[count].text = expression.substr(start, i - start);
-                if (!parseNumberText(tokens[count].text, &tokens[count].number))
-                {
-                    fail(error, line, "Invalid number literal.");
-                    return false;
-                }
-                count++;
-                continue;
-            }
-            if (isIdentifierStart(ch))
-            {
-                int start = i;
-                while (i < (int)expression.length() && isIdentifierPart(expression[i]))
-                {
-                    i++;
-                }
-                tokens[count].type = TOK_IDENT;
-                tokens[count].text = expression.substr(start, i - start);
-                tokens[count].number = 0;
-                count++;
-                continue;
-            }
-            if (ch == '"')
-            {
-                i++;
-                string value = "";
-                bool closed = false;
-                while (i < (int)expression.length())
-                {
-                    char current = expression[i];
-                    if (current == '\\')
-                    {
-                        i++;
-                        if (i >= (int)expression.length())
-                        {
-                            fail(error, line, "Unfinished string escape.");
-                            return false;
-                        }
-                        char escaped = expression[i];
-                        switch (escaped)
-                        {
-                        case 'n':
-                            value += '\n';
-                            break;
-                        case 't':
-                            value += '\t';
-                            break;
-                        case '"':
-                            value += '"';
-                            break;
-                        case '\\':
-                            value += '\\';
-                            break;
-                        default:
-                            fail(error, line, "Unknown string escape '\\" + string(1, escaped) + "'.");
-                            return false;
-                        }
-                    }
-                    else if (current == '"')
-                    {
-                        closed = true;
-                        i++;
-                        break;
-                    }
-                    else
-                    {
-                        value += current;
-                    }
-                    i++;
-                }
-                if (!closed)
-                {
-                    fail(error, line, "Unclosed string literal.");
-                    return false;
-                }
-                tokens[count].type = TOK_TEXT;
-                tokens[count].text = value;
-                tokens[count].number = 0;
-                count++;
-                continue;
-            }
-            if (i + 1 < (int)expression.length())
-            {
-                string two = expression.substr(i, 2);
-                if (two == "==" || two == "!=" || two == "<=" || two == ">=")
-                {
-                    tokens[count].type = TOK_OP;
-                    tokens[count].text = two;
-                    tokens[count].number = 0;
-                    count++;
-                    i += 2;
-                    continue;
-                }
-            }
-            switch (ch)
-            {
-            case '+':
-            case '-':
-            case '*':
-            case '/':
-            case '%':
-            case '^':
-            case '<':
-            case '>':
-            case '=':
-                tokens[count].type = TOK_OP;
-                tokens[count].text = string(1, ch);
-                tokens[count].number = 0;
-                count++;
-                i++;
-                break;
-            case '(':
-                tokens[count].type = TOK_LPAREN;
-                tokens[count].text = "(";
-                tokens[count].number = 0;
-                count++;
-                i++;
-                break;
-            case ')':
-                tokens[count].type = TOK_RPAREN;
-                tokens[count].text = ")";
-                tokens[count].number = 0;
-                count++;
-                i++;
-                break;
-            case '[':
-                tokens[count].type = TOK_LBRACKET;
-                tokens[count].text = "[";
-                tokens[count].number = 0;
-                count++;
-                i++;
-                break;
-            case ']':
-                tokens[count].type = TOK_RBRACKET;
-                tokens[count].text = "]";
-                tokens[count].number = 0;
-                count++;
-                i++;
-                break;
-            case ',':
-                tokens[count].type = TOK_COMMA;
-                tokens[count].text = ",";
-                tokens[count].number = 0;
-                count++;
-                i++;
-                break;
-            default:
-                fail(error, line, "Unexpected character '" + string(1, ch) + "' in expression.");
-                return false;
-            }
-        }
-        tokens[count].type = TOK_END;
-        tokens[count].text = "";
-        tokens[count].number = 0;
-        count++;
-        return true;
-    }
-
-    Token peek()
-    {
-        return tokens[pos];
-    }
-
-    bool matchType(int type)
-    {
-        if (tokens[pos].type == type)
-        {
-            pos++;
-            return true;
-        }
-        return false;
-    }
-
-    bool matchOp(string op)
-    {
-        if (tokens[pos].type == TOK_OP && tokens[pos].text == op)
-        {
-            pos++;
-            return true;
-        }
-        return false;
-    }
-
-    bool matchIdent(string ident)
-    {
-        if (tokens[pos].type == TOK_IDENT && tokens[pos].text == ident)
-        {
-            pos++;
-            return true;
-        }
-        return false;
-    }
-
-    bool needNumber(Value value, double *out, string operation)
-    {
-        if (value.type != VAL_NUMBER)
-        {
-            fail(error, line, operation + " requires a number.");
-            return false;
-        }
-        *out = value.number;
-        return true;
-    }
-
-    Value parseExpression()
-    {
-        return parseOr();
-    }
-
-    Value parseOr()
-    {
-        Value left = parseAnd();
-        while (!error->failed && matchIdent("or"))
-        {
-            Value right = parseAnd();
-            left = makeNumber(isTruthy(left) || isTruthy(right) ? 1 : 0);
-        }
-        return left;
-    }
-
-    Value parseAnd()
-    {
-        Value left = parseEquality();
-        while (!error->failed && matchIdent("and"))
-        {
-            Value right = parseEquality();
-            left = makeNumber(isTruthy(left) && isTruthy(right) ? 1 : 0);
-        }
-        return left;
-    }
-
-    Value parseEquality()
-    {
-        Value left = parseComparison();
-        while (!error->failed && (peek().type == TOK_OP && (peek().text == "==" || peek().text == "!=")))
-        {
-            string op = peek().text;
-            pos++;
-            Value right = parseComparison();
-            bool equal = false;
-            if (left.type == VAL_TEXT || right.type == VAL_TEXT)
-            {
-                equal = valueToString(left) == valueToString(right);
-            }
-            else
-            {
-                equal = left.number == right.number;
-            }
-            left = makeNumber(op == "==" ? (equal ? 1 : 0) : (!equal ? 1 : 0));
-        }
-        return left;
-    }
-
-    Value parseComparison()
-    {
-        Value left = parseTerm();
-        while (!error->failed && (peek().type == TOK_OP && (peek().text == "<" || peek().text == "<=" || peek().text == ">" || peek().text == ">=")))
-        {
-            string op = peek().text;
-            pos++;
-            Value right = parseTerm();
-            if (left.type == VAL_TEXT || right.type == VAL_TEXT)
-            {
-                string a = valueToString(left);
-                string b = valueToString(right);
-                if (op == "<")
-                    left = makeNumber(a < b ? 1 : 0);
-                else if (op == "<=")
-                    left = makeNumber(a <= b ? 1 : 0);
-                else if (op == ">")
-                    left = makeNumber(a > b ? 1 : 0);
-                else
-                    left = makeNumber(a >= b ? 1 : 0);
-            }
-            else
-            {
-                if (op == "<")
-                    left = makeNumber(left.number < right.number ? 1 : 0);
-                else if (op == "<=")
-                    left = makeNumber(left.number <= right.number ? 1 : 0);
-                else if (op == ">")
-                    left = makeNumber(left.number > right.number ? 1 : 0);
-                else
-                    left = makeNumber(left.number >= right.number ? 1 : 0);
-            }
-        }
-        return left;
-    }
-
-    Value parseTerm()
-    {
-        Value left = parseFactor();
-        while (!error->failed && (peek().type == TOK_OP && (peek().text == "+" || peek().text == "-")))
-        {
-            string op = peek().text;
-            pos++;
-            Value right = parseFactor();
-            if (op == "+")
-            {
-                if (left.type == VAL_TEXT || right.type == VAL_TEXT)
-                {
-                    left = makeText(valueToString(left) + valueToString(right));
-                }
-                else
-                {
-                    left = makeNumber(left.number + right.number);
-                }
-            }
-            else
-            {
-                double a, b;
-                if (!needNumber(left, &a, "Subtraction") || !needNumber(right, &b, "Subtraction"))
-                {
-                    return makeNull();
-                }
-                left = makeNumber(a - b);
-            }
-        }
-        return left;
-    }
-
-    Value parseFactor()
-    {
-        Value left = parsePower();
-        while (!error->failed && (peek().type == TOK_OP && (peek().text == "*" || peek().text == "/" || peek().text == "%")))
-        {
-            string op = peek().text;
-            pos++;
-            Value right = parsePower();
-            double a, b;
-            if (!needNumber(left, &a, "Arithmetic") || !needNumber(right, &b, "Arithmetic"))
-            {
-                return makeNull();
-            }
-            if ((op == "/" || op == "%") && b == 0)
-            {
-                fail(error, line, "Division by zero.");
-                return makeNull();
-            }
-            if (op == "*")
-            {
-                left = makeNumber(a * b);
-            }
-            else if (op == "/")
-            {
-                left = makeNumber(a / b);
-            }
-            else
-            {
-                if (!isIntegerValue(a) || !isIntegerValue(b))
-                {
-                    fail(error, line, "Modulo requires whole numbers.");
-                    return makeNull();
-                }
-                left = makeNumber((int)a % (int)b);
-            }
-        }
-        return left;
-    }
-
-    Value parsePower()
-    {
-        Value left = parseUnary();
-        if (!error->failed && matchOp("^"))
-        {
-            Value right = parsePower();
-            double base, exponent;
-            if (!needNumber(left, &base, "Exponent") || !needNumber(right, &exponent, "Exponent"))
-            {
-                return makeNull();
-            }
-            if (!isIntegerValue(exponent))
-            {
-                fail(error, line, "Exponent operator ^ requires a whole-number exponent.");
-                return makeNull();
-            }
-            bool ok = true;
-            double answer = manualPower(base, (int)exponent, &ok);
-            if (!ok)
-            {
-                fail(error, line, "Exponent cannot divide by zero.");
-                return makeNull();
-            }
-            return makeNumber(answer);
-        }
-        return left;
-    }
-
-    Value parseUnary()
-    {
-        if (matchOp("-"))
-        {
-            Value value = parseUnary();
-            double number;
-            if (!needNumber(value, &number, "Unary minus"))
-            {
-                return makeNull();
-            }
-            return makeNumber(-number);
-        }
-        if (matchIdent("not"))
-        {
-            Value value = parseUnary();
-            return makeNumber(isTruthy(value) ? 0 : 1);
-        }
-        return parsePrimary();
-    }
-
-    Value parsePrimary();
-    Value callBuiltIn(string name, Value args[], int argCount);
 };
 
-class Interpreter
+void initExpressionParser(ExpressionParser *parser, ErrorState *err, Environment *environment, Interpreter *owner, int lineNumber)
 {
-public:
+    parser->count = 0;
+    parser->pos = 0;
+    parser->line = lineNumber;
+    parser->error = err;
+    parser->env = environment;
+    parser->interpreter = owner;
+}
+
+bool parserTokenize(ExpressionParser *parser, string expression);
+Token parserPeek(ExpressionParser *parser);
+bool parserMatchType(ExpressionParser *parser, int type);
+bool parserMatchOp(ExpressionParser *parser, string op);
+bool parserMatchIdent(ExpressionParser *parser, string ident);
+bool parserNeedNumber(ExpressionParser *parser, Value value, double *out, string operation);
+Value parserParseExpression(ExpressionParser *parser);
+Value parserParseOr(ExpressionParser *parser);
+Value parserParseAnd(ExpressionParser *parser);
+Value parserParseEquality(ExpressionParser *parser);
+Value parserParseComparison(ExpressionParser *parser);
+Value parserParseTerm(ExpressionParser *parser);
+Value parserParseFactor(ExpressionParser *parser);
+Value parserParsePower(ExpressionParser *parser);
+Value parserParseUnary(ExpressionParser *parser);
+Value parserParsePrimary(ExpressionParser *parser);
+Value parserCallBuiltIn(ExpressionParser *parser, string name, Value args[], int argCount);
+Value interpreterCallFunction(Interpreter *interpreter, string name, Value args[], int argCount, int line);
+
+bool parserTokenize(ExpressionParser *parser, string expression)
+{
+    Token *tokens = parser->tokens;
+    int &count = parser->count;
+    int &pos = parser->pos;
+    int &line = parser->line;
+    ErrorState *error = parser->error;
+    count = 0;
+    pos = 0;
+    int i = 0;
+    while (i < (int)expression.length())
+    {
+        char ch = expression[i];
+        if (charIsSpace(ch))
+        {
+            i++;
+            continue;
+        }
+        if (count >= MAX_TOKENS - 1)
+        {
+            fail(error, line, "Expression is too long.");
+            return false;
+        }
+        if (charIsDigit(ch) || (ch == '.' && i + 1 < (int)expression.length() && charIsDigit(expression[i + 1])))
+        {
+            int start = i;
+            bool dotSeen = false;
+            while (i < (int)expression.length() && (charIsDigit(expression[i]) || expression[i] == '.'))
+            {
+                if (expression[i] == '.')
+                {
+                    if (dotSeen)
+                    {
+                        fail(error, line, "Invalid number literal.");
+                        return false;
+                    }
+                    dotSeen = true;
+                }
+                i++;
+            }
+            tokens[count].type = TOK_NUMBER;
+            tokens[count].text = expression.substr(start, i - start);
+            if (!parseNumberText(tokens[count].text, &tokens[count].number))
+            {
+                fail(error, line, "Invalid number literal.");
+                return false;
+            }
+            count++;
+            continue;
+        }
+        if (isIdentifierStart(ch))
+        {
+            int start = i;
+            while (i < (int)expression.length() && isIdentifierPart(expression[i]))
+            {
+                i++;
+            }
+            tokens[count].type = TOK_IDENT;
+            tokens[count].text = expression.substr(start, i - start);
+            tokens[count].number = 0;
+            count++;
+            continue;
+        }
+        if (ch == '"')
+        {
+            i++;
+            string value = "";
+            bool closed = false;
+            while (i < (int)expression.length())
+            {
+                char current = expression[i];
+                if (current == '\\')
+                {
+                    i++;
+                    if (i >= (int)expression.length())
+                    {
+                        fail(error, line, "Unfinished string escape.");
+                        return false;
+                    }
+                    char escaped = expression[i];
+                    switch (escaped)
+                    {
+                    case 'n':
+                        value += '\n';
+                        break;
+                    case 't':
+                        value += '\t';
+                        break;
+                    case '"':
+                        value += '"';
+                        break;
+                    case '\\':
+                        value += '\\';
+                        break;
+                    default:
+                        fail(error, line, "Unknown string escape '\\" + string(1, escaped) + "'.");
+                        return false;
+                    }
+                }
+                else if (current == '"')
+                {
+                    closed = true;
+                    i++;
+                    break;
+                }
+                else
+                {
+                    value += current;
+                }
+                i++;
+            }
+            if (!closed)
+            {
+                fail(error, line, "Unclosed string literal.");
+                return false;
+            }
+            tokens[count].type = TOK_TEXT;
+            tokens[count].text = value;
+            tokens[count].number = 0;
+            count++;
+            continue;
+        }
+        if (i + 1 < (int)expression.length())
+        {
+            string two = expression.substr(i, 2);
+            if (two == "==" || two == "!=" || two == "<=" || two == ">=")
+            {
+                tokens[count].type = TOK_OP;
+                tokens[count].text = two;
+                tokens[count].number = 0;
+                count++;
+                i += 2;
+                continue;
+            }
+        }
+        switch (ch)
+        {
+        case '+':
+        case '-':
+        case '*':
+        case '/':
+        case '%':
+        case '^':
+        case '<':
+        case '>':
+        case '=':
+            tokens[count].type = TOK_OP;
+            tokens[count].text = string(1, ch);
+            tokens[count].number = 0;
+            count++;
+            i++;
+            break;
+        case '(':
+            tokens[count].type = TOK_LPAREN;
+            tokens[count].text = "(";
+            tokens[count].number = 0;
+            count++;
+            i++;
+            break;
+        case ')':
+            tokens[count].type = TOK_RPAREN;
+            tokens[count].text = ")";
+            tokens[count].number = 0;
+            count++;
+            i++;
+            break;
+        case '[':
+            tokens[count].type = TOK_LBRACKET;
+            tokens[count].text = "[";
+            tokens[count].number = 0;
+            count++;
+            i++;
+            break;
+        case ']':
+            tokens[count].type = TOK_RBRACKET;
+            tokens[count].text = "]";
+            tokens[count].number = 0;
+            count++;
+            i++;
+            break;
+        case ',':
+            tokens[count].type = TOK_COMMA;
+            tokens[count].text = ",";
+            tokens[count].number = 0;
+            count++;
+            i++;
+            break;
+        default:
+            fail(error, line, "Unexpected character '" + string(1, ch) + "' in expression.");
+            return false;
+        }
+    }
+    tokens[count].type = TOK_END;
+    tokens[count].text = "";
+    tokens[count].number = 0;
+    count++;
+    return true;
+}
+
+Token parserPeek(ExpressionParser *parser)
+{
+    Token *tokens = parser->tokens;
+    int &pos = parser->pos;
+    return tokens[pos];
+}
+
+bool parserMatchType(ExpressionParser *parser, int type)
+{
+    Token *tokens = parser->tokens;
+    int &pos = parser->pos;
+    if (tokens[pos].type == type)
+    {
+        pos++;
+        return true;
+    }
+    return false;
+}
+
+bool parserMatchOp(ExpressionParser *parser, string op)
+{
+    Token *tokens = parser->tokens;
+    int &pos = parser->pos;
+    if (tokens[pos].type == TOK_OP && tokens[pos].text == op)
+    {
+        pos++;
+        return true;
+    }
+    return false;
+}
+
+bool parserMatchIdent(ExpressionParser *parser, string ident)
+{
+    Token *tokens = parser->tokens;
+    int &pos = parser->pos;
+    if (tokens[pos].type == TOK_IDENT && tokens[pos].text == ident)
+    {
+        pos++;
+        return true;
+    }
+    return false;
+}
+
+bool parserNeedNumber(ExpressionParser *parser, Value value, double *out, string operation)
+{
+    int &line = parser->line;
+    ErrorState *error = parser->error;
+    if (value.type != VAL_NUMBER)
+    {
+        fail(error, line, operation + " requires a number.");
+        return false;
+    }
+    *out = value.number;
+    return true;
+}
+
+Value parserParseExpression(ExpressionParser *parser)
+{
+    return parserParseOr(parser);
+}
+
+Value parserParseOr(ExpressionParser *parser)
+{
+    ErrorState *error = parser->error;
+    Value left = parserParseAnd(parser);
+    while (!error->failed && parserMatchIdent(parser, "or"))
+    {
+        Value right = parserParseAnd(parser);
+        left = makeNumber(isTruthy(left) || isTruthy(right) ? 1 : 0);
+    }
+    return left;
+}
+
+Value parserParseAnd(ExpressionParser *parser)
+{
+    ErrorState *error = parser->error;
+    Value left = parserParseEquality(parser);
+    while (!error->failed && parserMatchIdent(parser, "and"))
+    {
+        Value right = parserParseEquality(parser);
+        left = makeNumber(isTruthy(left) && isTruthy(right) ? 1 : 0);
+    }
+    return left;
+}
+
+Value parserParseEquality(ExpressionParser *parser)
+{
+    ErrorState *error = parser->error;
+    int &pos = parser->pos;
+    Value left = parserParseComparison(parser);
+    while (!error->failed && (parserPeek(parser).type == TOK_OP && (parserPeek(parser).text == "==" || parserPeek(parser).text == "!=")))
+    {
+        string op = parserPeek(parser).text;
+        pos++;
+        Value right = parserParseComparison(parser);
+        bool equal = false;
+        if (left.type == VAL_TEXT || right.type == VAL_TEXT)
+        {
+            equal = valueToString(left) == valueToString(right);
+        }
+        else
+        {
+            equal = left.number == right.number;
+        }
+        left = makeNumber(op == "==" ? (equal ? 1 : 0) : (!equal ? 1 : 0));
+    }
+    return left;
+}
+
+Value parserParseComparison(ExpressionParser *parser)
+{
+    ErrorState *error = parser->error;
+    int &pos = parser->pos;
+    Value left = parserParseTerm(parser);
+    while (!error->failed && (parserPeek(parser).type == TOK_OP && (parserPeek(parser).text == "<" || parserPeek(parser).text == "<=" || parserPeek(parser).text == ">" || parserPeek(parser).text == ">=")))
+    {
+        string op = parserPeek(parser).text;
+        pos++;
+        Value right = parserParseTerm(parser);
+        if (left.type == VAL_TEXT || right.type == VAL_TEXT)
+        {
+            string a = valueToString(left);
+            string b = valueToString(right);
+            if (op == "<")
+                left = makeNumber(a < b ? 1 : 0);
+            else if (op == "<=")
+                left = makeNumber(a <= b ? 1 : 0);
+            else if (op == ">")
+                left = makeNumber(a > b ? 1 : 0);
+            else
+                left = makeNumber(a >= b ? 1 : 0);
+        }
+        else
+        {
+            if (op == "<")
+                left = makeNumber(left.number < right.number ? 1 : 0);
+            else if (op == "<=")
+                left = makeNumber(left.number <= right.number ? 1 : 0);
+            else if (op == ">")
+                left = makeNumber(left.number > right.number ? 1 : 0);
+            else
+                left = makeNumber(left.number >= right.number ? 1 : 0);
+        }
+    }
+    return left;
+}
+
+Value parserParseTerm(ExpressionParser *parser)
+{
+    ErrorState *error = parser->error;
+    int &pos = parser->pos;
+    Value left = parserParseFactor(parser);
+    while (!error->failed && (parserPeek(parser).type == TOK_OP && (parserPeek(parser).text == "+" || parserPeek(parser).text == "-")))
+    {
+        string op = parserPeek(parser).text;
+        pos++;
+        Value right = parserParseFactor(parser);
+        if (op == "+")
+        {
+            if (left.type == VAL_TEXT || right.type == VAL_TEXT)
+            {
+                left = makeText(valueToString(left) + valueToString(right));
+            }
+            else
+            {
+                left = makeNumber(left.number + right.number);
+            }
+        }
+        else
+        {
+            double a, b;
+            if (!parserNeedNumber(parser, left, &a, "Subtraction") || !parserNeedNumber(parser, right, &b, "Subtraction"))
+            {
+                return makeNull();
+            }
+            left = makeNumber(a - b);
+        }
+    }
+    return left;
+}
+
+Value parserParseFactor(ExpressionParser *parser)
+{
+    ErrorState *error = parser->error;
+    int &pos = parser->pos;
+    int &line = parser->line;
+    Value left = parserParsePower(parser);
+    while (!error->failed && (parserPeek(parser).type == TOK_OP && (parserPeek(parser).text == "*" || parserPeek(parser).text == "/" || parserPeek(parser).text == "%")))
+    {
+        string op = parserPeek(parser).text;
+        pos++;
+        Value right = parserParsePower(parser);
+        double a, b;
+        if (!parserNeedNumber(parser, left, &a, "Arithmetic") || !parserNeedNumber(parser, right, &b, "Arithmetic"))
+        {
+            return makeNull();
+        }
+        if ((op == "/" || op == "%") && b == 0)
+        {
+            fail(error, line, "Division by zero.");
+            return makeNull();
+        }
+        if (op == "*")
+        {
+            left = makeNumber(a * b);
+        }
+        else if (op == "/")
+        {
+            left = makeNumber(a / b);
+        }
+        else
+        {
+            if (!isIntegerValue(a) || !isIntegerValue(b))
+            {
+                fail(error, line, "Modulo requires whole numbers.");
+                return makeNull();
+            }
+            left = makeNumber((int)a % (int)b);
+        }
+    }
+    return left;
+}
+
+Value parserParsePower(ExpressionParser *parser)
+{
+    ErrorState *error = parser->error;
+    int &line = parser->line;
+    Value left = parserParseUnary(parser);
+    if (!error->failed && parserMatchOp(parser, "^"))
+    {
+        Value right = parserParsePower(parser);
+        double base, exponent;
+        if (!parserNeedNumber(parser, left, &base, "Exponent") || !parserNeedNumber(parser, right, &exponent, "Exponent"))
+        {
+            return makeNull();
+        }
+        if (!isIntegerValue(exponent))
+        {
+            fail(error, line, "Exponent operator ^ requires a whole-number exponent.");
+            return makeNull();
+        }
+        bool ok = true;
+        double answer = manualPower(base, (int)exponent, &ok);
+        if (!ok)
+        {
+            fail(error, line, "Exponent cannot divide by zero.");
+            return makeNull();
+        }
+        return makeNumber(answer);
+    }
+    return left;
+}
+
+Value parserParseUnary(ExpressionParser *parser)
+{
+    if (parserMatchOp(parser, "-"))
+    {
+        Value value = parserParseUnary(parser);
+        double number;
+        if (!parserNeedNumber(parser, value, &number, "Unary minus"))
+        {
+            return makeNull();
+        }
+        return makeNumber(-number);
+    }
+    if (parserMatchIdent(parser, "not"))
+    {
+        Value value = parserParseUnary(parser);
+        return makeNumber(isTruthy(value) ? 0 : 1);
+    }
+    return parserParsePrimary(parser);
+}
+
+
+
+struct Interpreter
+{
     Program program;
     FunctionDef funcs[MAX_FUNCTIONS];
     Environment globals;
     ErrorState error;
     int callDepth;
     int randomSeed;
+};
 
-    Interpreter() : globals(NULL)
+void initInterpreter(Interpreter *interpreter)
+{
+    initEnvironment(&interpreter->globals, NULL);
+    interpreter->program.count = 0;
+    interpreter->callDepth = 0;
+    interpreter->randomSeed = 12345;
+    interpreter->error.failed = false;
+    interpreter->error.line = 0;
+    interpreter->error.message = "";
+    for (int i = 0; i < MAX_FUNCTIONS; i++)
     {
-        program.count = 0;
-        callDepth = 0;
-        randomSeed = 12345;
-        error.failed = false;
-        error.line = 0;
-        error.message = "";
-        for (int i = 0; i < MAX_FUNCTIONS; i++)
-        {
-            funcs[i].used = false;
-            funcs[i].name = "";
-            funcs[i].paramCount = 0;
-            funcs[i].startLine = 0;
-            funcs[i].endLine = 0;
-        }
+        interpreter->funcs[i].used = false;
+        interpreter->funcs[i].name = "";
+        interpreter->funcs[i].paramCount = 0;
+        interpreter->funcs[i].startLine = 0;
+        interpreter->funcs[i].endLine = 0;
     }
+}
 
-    bool loadFile(string path)
-    {
-        ifstream file(path.c_str());
-        if (!file)
-        {
-            fail(&error, 0, "Cannot open source file '" + path + "'.");
-            return false;
-        }
-        string line;
-        while (getline(file, line))
-        {
-            if (program.count >= MAX_LINES)
-            {
-                fail(&error, program.count, "Program is too long. Maximum lines is " + numberToString(MAX_LINES) + ".");
-                return false;
-            }
-            program.lines[program.count] = line;
-            program.count++;
-        }
-        return true;
-    }
+void freeInterpreter(Interpreter *interpreter)
+{
+    freeEnvironment(&interpreter->globals);
+}
 
-    string cleanLine(int index)
-    {
-        return trim(removeComment(program.lines[index]));
-    }
+bool interpreterLoadFile(Interpreter *interpreter, string path);
+string interpreterCleanLine(Interpreter *interpreter, int index);
+FunctionDef *interpreterFindFunction(Interpreter *interpreter, string name);
+int interpreterAllocateFunction(Interpreter *interpreter);
+bool interpreterParseFunctionHeader(Interpreter *interpreter, string line, FunctionDef *target, int lineNumber);
+bool interpreterIsBlockStart(Interpreter *interpreter, string line);
+int interpreterFindMatchingEnd(Interpreter *interpreter, int start, int stop);
+int interpreterFindElseOrEnd(Interpreter *interpreter, int start, int stop, bool *hasElse);
+bool interpreterPreprocessFunctions(Interpreter *interpreter);
+bool interpreterEvalExpression(Interpreter *interpreter, string expression, Environment *env, int line, Value *out);
+int interpreterFindTopLevelAssignment(Interpreter *interpreter, string line);
+int interpreterSplitTopLevelComma(Interpreter *interpreter, string line);
+int interpreterCheckedIndex(Interpreter *interpreter, Value value, int max, int line, string subject);
+bool interpreterParseNameAndBracket(Interpreter *interpreter, string text, string *name, string *first, string *second);
+bool interpreterHandleArrayDeclaration(Interpreter *interpreter, string line, Environment *env, int lineNumber);
+bool interpreterHandleMatrixDeclaration(Interpreter *interpreter, string line, Environment *env, int lineNumber);
+bool interpreterHandleSet(Interpreter *interpreter, string line, Environment *env, int lineNumber);
+bool interpreterHandleFileWrite(Interpreter *interpreter, string line, Environment *env, int lineNumber, bool append);
+ExecResult interpreterExecuteBlock(Interpreter *interpreter, int start, int end, Environment *env);
+Value interpreterCallFunction(Interpreter *interpreter, string name, Value args[], int argCount, int line);
+bool interpreterRun(Interpreter *interpreter);
 
-    FunctionDef *findFunction(string name)
+bool interpreterLoadFile(Interpreter *interpreter, string path)
+{
+    Program &program = interpreter->program;
+    FunctionDef *funcs = interpreter->funcs;
+    Environment &globals = interpreter->globals;
+    ErrorState &error = interpreter->error;
+    int &callDepth = interpreter->callDepth;
+    int &randomSeed = interpreter->randomSeed;
+    ifstream file(path.c_str());
+    if (!file)
     {
-        for (int i = 0; i < MAX_FUNCTIONS; i++)
-        {
-            if (funcs[i].used && funcs[i].name == name)
-            {
-                return &funcs[i];
-            }
-        }
-        return NULL;
-    }
-
-    int allocateFunction()
-    {
-        for (int i = 0; i < MAX_FUNCTIONS; i++)
-        {
-            if (!funcs[i].used)
-            {
-                funcs[i].used = true;
-                return i;
-            }
-        }
-        return -1;
-    }
-
-    bool parseFunctionHeader(string line, FunctionDef *target, int lineNumber)
-    {
-        int open = (int)line.find('(');
-        int close = (int)line.rfind(')');
-        if (open < 0 || close < 0 || close < open)
-        {
-            fail(&error, lineNumber, "Function must look like: func name(a, b)");
-            return false;
-        }
-        string name = trim(line.substr(4, open - 4));
-        if (!isValidIdentifier(name))
-        {
-            fail(&error, lineNumber, "Invalid function name '" + name + "'.");
-            return false;
-        }
-        if (findFunction(name) != NULL)
-        {
-            fail(&error, lineNumber, "Function '" + name + "' is already defined.");
-            return false;
-        }
-        target->name = name;
-        target->paramCount = 0;
-        string params = trim(line.substr(open + 1, close - open - 1));
-        if (trim(line.substr(close + 1)) != "")
-        {
-            fail(&error, lineNumber, "Unexpected text after function parameter list.");
-            return false;
-        }
-        if (params == "")
-        {
-            return true;
-        }
-        int start = 0;
-        while (start <= (int)params.length())
-        {
-            int comma = (int)params.find(',', start);
-            if (comma < 0)
-            {
-                comma = (int)params.length();
-            }
-            string param = trim(params.substr(start, comma - start));
-            if (!isValidIdentifier(param))
-            {
-                fail(&error, lineNumber, "Invalid parameter name '" + param + "'.");
-                return false;
-            }
-            if (target->paramCount >= MAX_PARAMS)
-            {
-                fail(&error, lineNumber, "Too many parameters. Maximum is " + numberToString(MAX_PARAMS) + ".");
-                return false;
-            }
-            for (int i = 0; i < target->paramCount; i++)
-            {
-                if (target->params[i] == param)
-                {
-                    fail(&error, lineNumber, "Duplicate parameter '" + param + "'.");
-                    return false;
-                }
-            }
-            target->params[target->paramCount] = param;
-            target->paramCount++;
-            start = comma + 1;
-            if (comma == (int)params.length())
-            {
-                break;
-            }
-        }
-        return true;
-    }
-
-    bool isBlockStart(string line)
-    {
-        return startsWithWord(line, "if") || startsWithWord(line, "while") ||
-               startsWithWord(line, "repeat") || startsWithWord(line, "func");
-    }
-
-    int findMatchingEnd(int start, int stop)
-    {
-        int depth = 0;
-        for (int i = start + 1; i < stop; i++)
-        {
-            string line = cleanLine(i);
-            if (line == "")
-            {
-                continue;
-            }
-            if (isBlockStart(line))
-            {
-                depth++;
-            }
-            else if (line == "end")
-            {
-                if (depth == 0)
-                {
-                    return i;
-                }
-                depth--;
-            }
-        }
-        return -1;
-    }
-
-    int findElseOrEnd(int start, int stop, bool *hasElse)
-    {
-        int depth = 0;
-        *hasElse = false;
-        for (int i = start + 1; i < stop; i++)
-        {
-            string line = cleanLine(i);
-            if (line == "")
-            {
-                continue;
-            }
-            if (isBlockStart(line))
-            {
-                depth++;
-            }
-            else if (line == "end")
-            {
-                if (depth == 0)
-                {
-                    return i;
-                }
-                depth--;
-            }
-            else if (line == "else" && depth == 0)
-            {
-                *hasElse = true;
-                return i;
-            }
-        }
-        return -1;
-    }
-
-    bool preprocessFunctions()
-    {
-        for (int i = 0; i < program.count; i++)
-        {
-            string line = cleanLine(i);
-            if (startsWithWord(line, "func"))
-            {
-                int slot = allocateFunction();
-                if (slot < 0)
-                {
-                    fail(&error, i + 1, "Function table is full. Maximum functions is " + numberToString(MAX_FUNCTIONS) + ".");
-                    return false;
-                }
-                if (!parseFunctionHeader(line, &funcs[slot], i + 1))
-                {
-                    return false;
-                }
-                int endLine = findMatchingEnd(i, program.count);
-                if (endLine < 0)
-                {
-                    fail(&error, i + 1, "Function '" + funcs[slot].name + "' is missing its closing end.");
-                    return false;
-                }
-                funcs[slot].startLine = i;
-                funcs[slot].endLine = endLine;
-                i = endLine;
-            }
-        }
-        return true;
-    }
-
-    bool evalExpression(string expression, Environment *env, int line, Value *out)
-    {
-        ExpressionParser parser(&error, env, this, line);
-        if (!parser.tokenize(expression))
-        {
-            return false;
-        }
-        *out = parser.parseExpression();
-        if (error.failed)
-        {
-            return false;
-        }
-        if (parser.peek().type != TOK_END)
-        {
-            fail(&error, line, "Unexpected token '" + parser.peek().text + "' after expression.");
-            return false;
-        }
-        return true;
-    }
-
-    int findTopLevelAssignment(string line)
-    {
-        bool inString = false;
-        bool escaped = false;
-        int parens = 0;
-        int brackets = 0;
-        for (int i = 0; i < (int)line.length(); i++)
-        {
-            char ch = line[i];
-            if (inString)
-            {
-                if (escaped)
-                    escaped = false;
-                else if (ch == '\\')
-                    escaped = true;
-                else if (ch == '"')
-                    inString = false;
-                continue;
-            }
-            if (ch == '"')
-            {
-                inString = true;
-            }
-            else if (ch == '(')
-            {
-                parens++;
-            }
-            else if (ch == ')')
-            {
-                parens--;
-            }
-            else if (ch == '[')
-            {
-                brackets++;
-            }
-            else if (ch == ']')
-            {
-                brackets--;
-            }
-            else if (ch == '=' && parens == 0 && brackets == 0)
-            {
-                char before = i > 0 ? line[i - 1] : '\0';
-                char after = i + 1 < (int)line.length() ? line[i + 1] : '\0';
-                if (before != '=' && before != '<' && before != '>' && before != '!' && after != '=')
-                {
-                    return i;
-                }
-            }
-        }
-        return -1;
-    }
-
-    int splitTopLevelComma(string line)
-    {
-        bool inString = false;
-        bool escaped = false;
-        int parens = 0;
-        int brackets = 0;
-        for (int i = 0; i < (int)line.length(); i++)
-        {
-            char ch = line[i];
-            if (inString)
-            {
-                if (escaped)
-                    escaped = false;
-                else if (ch == '\\')
-                    escaped = true;
-                else if (ch == '"')
-                    inString = false;
-                continue;
-            }
-            if (ch == '"')
-            {
-                inString = true;
-            }
-            else if (ch == '(')
-            {
-                parens++;
-            }
-            else if (ch == ')')
-            {
-                parens--;
-            }
-            else if (ch == '[')
-            {
-                brackets++;
-            }
-            else if (ch == ']')
-            {
-                brackets--;
-            }
-            else if (ch == ',' && parens == 0 && brackets == 0)
-            {
-                return i;
-            }
-        }
-        return -1;
-    }
-
-    int checkedIndex(Value value, int max, int line, string subject)
-    {
-        if (value.type != VAL_NUMBER || !isIntegerValue(value.number))
-        {
-            fail(&error, line, subject + " index must be a whole number.");
-            return -1;
-        }
-        int index = (int)value.number;
-        if (index < 0 || index >= max)
-        {
-            fail(&error, line, subject + " index " + numberToString(index) + " is out of bounds.");
-            return -1;
-        }
-        return index;
-    }
-
-    bool parseNameAndBracket(string text, string *name, string *first, string *second)
-    {
-        *name = "";
-        *first = "";
-        *second = "";
-        int open1 = (int)text.find('[');
-        int close1 = (int)text.find(']', open1 + 1);
-        if (open1 < 0 || close1 < 0)
-        {
-            return false;
-        }
-        *name = trim(text.substr(0, open1));
-        *first = trim(text.substr(open1 + 1, close1 - open1 - 1));
-        string rest = trim(text.substr(close1 + 1));
-        if (rest != "")
-        {
-            if (rest[0] != '[')
-            {
-                return false;
-            }
-            int close2 = (int)rest.find(']', 1);
-            if (close2 < 0)
-            {
-                return false;
-            }
-            *second = trim(rest.substr(1, close2 - 1));
-            if (trim(rest.substr(close2 + 1)) != "")
-            {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    bool handleArrayDeclaration(string line, Environment *env, int lineNumber)
-    {
-        string rest = trim(line.substr(5));
-        string name, first, second;
-        if (!parseNameAndBracket(rest, &name, &first, &second) || second != "")
-        {
-            fail(&error, lineNumber, "Array declaration must look like: array name[size]");
-            return false;
-        }
-        Value sizeValue;
-        if (!evalExpression(first, env, lineNumber, &sizeValue))
-        {
-            return false;
-        }
-        if (sizeValue.type != VAL_NUMBER || !isIntegerValue(sizeValue.number))
-        {
-            fail(&error, lineNumber, "Array size must be a whole number.");
-            return false;
-        }
-        env->declareArray(name, (int)sizeValue.number, &error, lineNumber);
-        return !error.failed;
-    }
-
-    bool handleMatrixDeclaration(string line, Environment *env, int lineNumber)
-    {
-        string rest = trim(line.substr(6));
-        string name, first, second;
-        if (!parseNameAndBracket(rest, &name, &first, &second) || second == "")
-        {
-            fail(&error, lineNumber, "Matrix declaration must look like: matrix name[rows][cols]");
-            return false;
-        }
-        Value rowValue, colValue;
-        if (!evalExpression(first, env, lineNumber, &rowValue) ||
-            !evalExpression(second, env, lineNumber, &colValue))
-        {
-            return false;
-        }
-        if (rowValue.type != VAL_NUMBER || colValue.type != VAL_NUMBER ||
-            !isIntegerValue(rowValue.number) || !isIntegerValue(colValue.number))
-        {
-            fail(&error, lineNumber, "Matrix dimensions must be whole numbers.");
-            return false;
-        }
-        env->declareMatrix(name, (int)rowValue.number, (int)colValue.number, &error, lineNumber);
-        return !error.failed;
-    }
-
-    bool handleSet(string line, Environment *env, int lineNumber)
-    {
-        string rest = trim(line.substr(3));
-        int eq = findTopLevelAssignment(rest);
-        if (eq < 0)
-        {
-            fail(&error, lineNumber, "Set statement must look like: set data[index] = value");
-            return false;
-        }
-        string target = trim(rest.substr(0, eq));
-        string expression = trim(rest.substr(eq + 1));
-        string name, first, second;
-        if (!parseNameAndBracket(target, &name, &first, &second))
-        {
-            fail(&error, lineNumber, "Set target must be an array or matrix cell.");
-            return false;
-        }
-        Variable *var = env->findAny(name);
-        if (var == NULL)
-        {
-            fail(&error, lineNumber, "Unknown array or matrix '" + name + "'.");
-            return false;
-        }
-        Value newValue;
-        if (!evalExpression(expression, env, lineNumber, &newValue))
-        {
-            return false;
-        }
-        Value firstValue, secondValue;
-        if (!evalExpression(first, env, lineNumber, &firstValue))
-        {
-            return false;
-        }
-        if (var->kind == VAR_ARRAY)
-        {
-            if (second != "")
-            {
-                fail(&error, lineNumber, "'" + name + "' is a one-dimensional array.");
-                return false;
-            }
-            int index = checkedIndex(firstValue, var->rows, lineNumber, "Array");
-            if (index < 0)
-            {
-                return false;
-            }
-            var->cells[index] = newValue;
-            return true;
-        }
-        if (var->kind == VAR_MATRIX)
-        {
-            if (second == "")
-            {
-                fail(&error, lineNumber, "'" + name + "' is a matrix and needs two indexes.");
-                return false;
-            }
-            if (!evalExpression(second, env, lineNumber, &secondValue))
-            {
-                return false;
-            }
-            int row = checkedIndex(firstValue, var->rows, lineNumber, "Matrix row");
-            int col = checkedIndex(secondValue, var->cols, lineNumber, "Matrix column");
-            if (row < 0 || col < 0)
-            {
-                return false;
-            }
-            var->cells[row * var->cols + col] = newValue;
-            return true;
-        }
-        fail(&error, lineNumber, "'" + name + "' is not an array or matrix.");
+        fail(&error, 0, "Cannot open source file '" + path + "'.");
         return false;
     }
-
-    bool handleFileWrite(string line, Environment *env, int lineNumber, bool append)
+    string line;
+    while (getline(file, line))
     {
-        string rest = trim(line.substr(append ? 10 : 9));
-        int comma = splitTopLevelComma(rest);
-        if (comma < 0)
+        if (program.count >= MAX_LINES)
         {
-            fail(&error, lineNumber, string(append ? "fileappend" : "filewrite") + " must look like: command path, value");
+            fail(&error, program.count, "Program is too long. Maximum lines is " + numberToString(MAX_LINES) + ".");
             return false;
         }
-        Value path, data;
-        if (!evalExpression(trim(rest.substr(0, comma)), env, lineNumber, &path) ||
-            !evalExpression(trim(rest.substr(comma + 1)), env, lineNumber, &data))
+        program.lines[program.count] = line;
+        program.count++;
+    }
+    return true;
+}
+
+string interpreterCleanLine(Interpreter *interpreter, int index)
+{
+    Program &program = interpreter->program;
+    FunctionDef *funcs = interpreter->funcs;
+    Environment &globals = interpreter->globals;
+    ErrorState &error = interpreter->error;
+    int &callDepth = interpreter->callDepth;
+    int &randomSeed = interpreter->randomSeed;
+    return trim(removeComment(program.lines[index]));
+}
+
+FunctionDef *interpreterFindFunction(Interpreter *interpreter, string name)
+{
+    Program &program = interpreter->program;
+    FunctionDef *funcs = interpreter->funcs;
+    Environment &globals = interpreter->globals;
+    ErrorState &error = interpreter->error;
+    int &callDepth = interpreter->callDepth;
+    int &randomSeed = interpreter->randomSeed;
+    for (int i = 0; i < MAX_FUNCTIONS; i++)
+    {
+        if (funcs[i].used && funcs[i].name == name)
         {
-            return false;
+            return &funcs[i];
         }
-        string filePath = valueToString(path);
-        ofstream file;
-        if (append)
+    }
+    return NULL;
+}
+
+int interpreterAllocateFunction(Interpreter *interpreter)
+{
+    Program &program = interpreter->program;
+    FunctionDef *funcs = interpreter->funcs;
+    Environment &globals = interpreter->globals;
+    ErrorState &error = interpreter->error;
+    int &callDepth = interpreter->callDepth;
+    int &randomSeed = interpreter->randomSeed;
+    for (int i = 0; i < MAX_FUNCTIONS; i++)
+    {
+        if (!funcs[i].used)
         {
-            file.open(filePath.c_str(), ios::app);
+            funcs[i].used = true;
+            return i;
         }
-        else
-        {
-            file.open(filePath.c_str());
-        }
-        if (!file)
-        {
-            fail(&error, lineNumber, "Cannot write to file '" + filePath + "'.");
-            return false;
-        }
-        file << valueToString(data);
+    }
+    return -1;
+}
+
+bool interpreterParseFunctionHeader(Interpreter *interpreter, string line, FunctionDef *target, int lineNumber)
+{
+    Program &program = interpreter->program;
+    FunctionDef *funcs = interpreter->funcs;
+    Environment &globals = interpreter->globals;
+    ErrorState &error = interpreter->error;
+    int &callDepth = interpreter->callDepth;
+    int &randomSeed = interpreter->randomSeed;
+    int open = (int)line.find('(');
+    int close = (int)line.rfind(')');
+    if (open < 0 || close < 0 || close < open)
+    {
+        fail(&error, lineNumber, "Function must look like: func name(a, b)");
+        return false;
+    }
+    string name = trim(line.substr(4, open - 4));
+    if (!isValidIdentifier(name))
+    {
+        fail(&error, lineNumber, "Invalid function name '" + name + "'.");
+        return false;
+    }
+    if (interpreterFindFunction(interpreter, name) != NULL)
+    {
+        fail(&error, lineNumber, "Function '" + name + "' is already defined.");
+        return false;
+    }
+    target->name = name;
+    target->paramCount = 0;
+    string params = trim(line.substr(open + 1, close - open - 1));
+    if (trim(line.substr(close + 1)) != "")
+    {
+        fail(&error, lineNumber, "Unexpected text after function parameter list.");
+        return false;
+    }
+    if (params == "")
+    {
         return true;
     }
-
-    ExecResult executeBlock(int start, int end, Environment *env)
+    int start = 0;
+    while (start <= (int)params.length())
     {
-        ExecResult result;
-        result.hasReturn = false;
-        result.value = makeNull();
-        int loopSteps = 0;
-
-        for (int i = start; i < end && !error.failed; i++)
+        int comma = (int)params.find(',', start);
+        if (comma < 0)
         {
-            string line = cleanLine(i);
-            int lineNumber = i + 1;
-            if (line == "")
+            comma = (int)params.length();
+        }
+        string param = trim(params.substr(start, comma - start));
+        if (!isValidIdentifier(param))
+        {
+            fail(&error, lineNumber, "Invalid parameter name '" + param + "'.");
+            return false;
+        }
+        if (target->paramCount >= MAX_PARAMS)
+        {
+            fail(&error, lineNumber, "Too many parameters. Maximum is " + numberToString(MAX_PARAMS) + ".");
+            return false;
+        }
+        for (int i = 0; i < target->paramCount; i++)
+        {
+            if (target->params[i] == param)
             {
-                continue;
+                fail(&error, lineNumber, "Duplicate parameter '" + param + "'.");
+                return false;
             }
-            if (startsWithWord(line, "func"))
+        }
+        target->params[target->paramCount] = param;
+        target->paramCount++;
+        start = comma + 1;
+        if (comma == (int)params.length())
+        {
+            break;
+        }
+    }
+    return true;
+}
+
+bool interpreterIsBlockStart(Interpreter *interpreter, string line)
+{
+    Program &program = interpreter->program;
+    FunctionDef *funcs = interpreter->funcs;
+    Environment &globals = interpreter->globals;
+    ErrorState &error = interpreter->error;
+    int &callDepth = interpreter->callDepth;
+    int &randomSeed = interpreter->randomSeed;
+    return startsWithWord(line, "if") || startsWithWord(line, "while") ||
+           startsWithWord(line, "repeat") || startsWithWord(line, "func");
+}
+
+int interpreterFindMatchingEnd(Interpreter *interpreter, int start, int stop)
+{
+    Program &program = interpreter->program;
+    FunctionDef *funcs = interpreter->funcs;
+    Environment &globals = interpreter->globals;
+    ErrorState &error = interpreter->error;
+    int &callDepth = interpreter->callDepth;
+    int &randomSeed = interpreter->randomSeed;
+    int depth = 0;
+    for (int i = start + 1; i < stop; i++)
+    {
+        string line = interpreterCleanLine(interpreter, i);
+        if (line == "")
+        {
+            continue;
+        }
+        if (interpreterIsBlockStart(interpreter, line))
+        {
+            depth++;
+        }
+        else if (line == "end")
+        {
+            if (depth == 0)
             {
-                int functionEnd = findMatchingEnd(i, end);
-                if (functionEnd < 0)
+                return i;
+            }
+            depth--;
+        }
+    }
+    return -1;
+}
+
+int interpreterFindElseOrEnd(Interpreter *interpreter, int start, int stop, bool *hasElse)
+{
+    Program &program = interpreter->program;
+    FunctionDef *funcs = interpreter->funcs;
+    Environment &globals = interpreter->globals;
+    ErrorState &error = interpreter->error;
+    int &callDepth = interpreter->callDepth;
+    int &randomSeed = interpreter->randomSeed;
+    int depth = 0;
+    *hasElse = false;
+    for (int i = start + 1; i < stop; i++)
+    {
+        string line = interpreterCleanLine(interpreter, i);
+        if (line == "")
+        {
+            continue;
+        }
+        if (interpreterIsBlockStart(interpreter, line))
+        {
+            depth++;
+        }
+        else if (line == "end")
+        {
+            if (depth == 0)
+            {
+                return i;
+            }
+            depth--;
+        }
+        else if (line == "else" && depth == 0)
+        {
+            *hasElse = true;
+            return i;
+        }
+    }
+    return -1;
+}
+
+bool interpreterPreprocessFunctions(Interpreter *interpreter)
+{
+    Program &program = interpreter->program;
+    FunctionDef *funcs = interpreter->funcs;
+    Environment &globals = interpreter->globals;
+    ErrorState &error = interpreter->error;
+    int &callDepth = interpreter->callDepth;
+    int &randomSeed = interpreter->randomSeed;
+    for (int i = 0; i < program.count; i++)
+    {
+        string line = interpreterCleanLine(interpreter, i);
+        if (startsWithWord(line, "func"))
+        {
+            int slot = interpreterAllocateFunction(interpreter);
+            if (slot < 0)
+            {
+                fail(&error, i + 1, "Function table is full. Maximum functions is " + numberToString(MAX_FUNCTIONS) + ".");
+                return false;
+            }
+            if (!interpreterParseFunctionHeader(interpreter, line, &funcs[slot], i + 1))
+            {
+                return false;
+            }
+            int endLine = interpreterFindMatchingEnd(interpreter, i, program.count);
+            if (endLine < 0)
+            {
+                fail(&error, i + 1, "Function '" + funcs[slot].name + "' is missing its closing end.");
+                return false;
+            }
+            funcs[slot].startLine = i;
+            funcs[slot].endLine = endLine;
+            i = endLine;
+        }
+    }
+    return true;
+}
+
+bool interpreterEvalExpression(Interpreter *interpreter, string expression, Environment *env, int line, Value *out)
+{
+    Program &program = interpreter->program;
+    FunctionDef *funcs = interpreter->funcs;
+    Environment &globals = interpreter->globals;
+    ErrorState &error = interpreter->error;
+    int &callDepth = interpreter->callDepth;
+    int &randomSeed = interpreter->randomSeed;
+    ExpressionParser parser;
+    initExpressionParser(&parser, &error, env, interpreter, line);
+    if (!parserTokenize(&parser, expression))
+    {
+        return false;
+    }
+    *out = parserParseExpression(&parser);
+    if (error.failed)
+    {
+        return false;
+    }
+    if (parserPeek(&parser).type != TOK_END)
+    {
+        fail(&error, line, "Unexpected token '" + parserPeek(&parser).text + "' after expression.");
+        return false;
+    }
+    return true;
+}
+
+int interpreterFindTopLevelAssignment(Interpreter *interpreter, string line)
+{
+    Program &program = interpreter->program;
+    FunctionDef *funcs = interpreter->funcs;
+    Environment &globals = interpreter->globals;
+    ErrorState &error = interpreter->error;
+    int &callDepth = interpreter->callDepth;
+    int &randomSeed = interpreter->randomSeed;
+    bool inString = false;
+    bool escaped = false;
+    int parens = 0;
+    int brackets = 0;
+    for (int i = 0; i < (int)line.length(); i++)
+    {
+        char ch = line[i];
+        if (inString)
+        {
+            if (escaped)
+                escaped = false;
+            else if (ch == '\\')
+                escaped = true;
+            else if (ch == '"')
+                inString = false;
+            continue;
+        }
+        if (ch == '"')
+        {
+            inString = true;
+        }
+        else if (ch == '(')
+        {
+            parens++;
+        }
+        else if (ch == ')')
+        {
+            parens--;
+        }
+        else if (ch == '[')
+        {
+            brackets++;
+        }
+        else if (ch == ']')
+        {
+            brackets--;
+        }
+        else if (ch == '=' && parens == 0 && brackets == 0)
+        {
+            char before = i > 0 ? line[i - 1] : '\0';
+            char after = i + 1 < (int)line.length() ? line[i + 1] : '\0';
+            if (before != '=' && before != '<' && before != '>' && before != '!' && after != '=')
+            {
+                return i;
+            }
+        }
+    }
+    return -1;
+}
+
+int interpreterSplitTopLevelComma(Interpreter *interpreter, string line)
+{
+    Program &program = interpreter->program;
+    FunctionDef *funcs = interpreter->funcs;
+    Environment &globals = interpreter->globals;
+    ErrorState &error = interpreter->error;
+    int &callDepth = interpreter->callDepth;
+    int &randomSeed = interpreter->randomSeed;
+    bool inString = false;
+    bool escaped = false;
+    int parens = 0;
+    int brackets = 0;
+    for (int i = 0; i < (int)line.length(); i++)
+    {
+        char ch = line[i];
+        if (inString)
+        {
+            if (escaped)
+                escaped = false;
+            else if (ch == '\\')
+                escaped = true;
+            else if (ch == '"')
+                inString = false;
+            continue;
+        }
+        if (ch == '"')
+        {
+            inString = true;
+        }
+        else if (ch == '(')
+        {
+            parens++;
+        }
+        else if (ch == ')')
+        {
+            parens--;
+        }
+        else if (ch == '[')
+        {
+            brackets++;
+        }
+        else if (ch == ']')
+        {
+            brackets--;
+        }
+        else if (ch == ',' && parens == 0 && brackets == 0)
+        {
+            return i;
+        }
+    }
+    return -1;
+}
+
+int interpreterCheckedIndex(Interpreter *interpreter, Value value, int max, int line, string subject)
+{
+    Program &program = interpreter->program;
+    FunctionDef *funcs = interpreter->funcs;
+    Environment &globals = interpreter->globals;
+    ErrorState &error = interpreter->error;
+    int &callDepth = interpreter->callDepth;
+    int &randomSeed = interpreter->randomSeed;
+    if (value.type != VAL_NUMBER || !isIntegerValue(value.number))
+    {
+        fail(&error, line, subject + " index must be a whole number.");
+        return -1;
+    }
+    int index = (int)value.number;
+    if (index < 0 || index >= max)
+    {
+        fail(&error, line, subject + " index " + numberToString(index) + " is out of bounds.");
+        return -1;
+    }
+    return index;
+}
+
+bool interpreterParseNameAndBracket(Interpreter *interpreter, string text, string *name, string *first, string *second)
+{
+    Program &program = interpreter->program;
+    FunctionDef *funcs = interpreter->funcs;
+    Environment &globals = interpreter->globals;
+    ErrorState &error = interpreter->error;
+    int &callDepth = interpreter->callDepth;
+    int &randomSeed = interpreter->randomSeed;
+    *name = "";
+    *first = "";
+    *second = "";
+    int open1 = (int)text.find('[');
+    int close1 = (int)text.find(']', open1 + 1);
+    if (open1 < 0 || close1 < 0)
+    {
+        return false;
+    }
+    *name = trim(text.substr(0, open1));
+    *first = trim(text.substr(open1 + 1, close1 - open1 - 1));
+    string rest = trim(text.substr(close1 + 1));
+    if (rest != "")
+    {
+        if (rest[0] != '[')
+        {
+            return false;
+        }
+        int close2 = (int)rest.find(']', 1);
+        if (close2 < 0)
+        {
+            return false;
+        }
+        *second = trim(rest.substr(1, close2 - 1));
+        if (trim(rest.substr(close2 + 1)) != "")
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool interpreterHandleArrayDeclaration(Interpreter *interpreter, string line, Environment *env, int lineNumber)
+{
+    Program &program = interpreter->program;
+    FunctionDef *funcs = interpreter->funcs;
+    Environment &globals = interpreter->globals;
+    ErrorState &error = interpreter->error;
+    int &callDepth = interpreter->callDepth;
+    int &randomSeed = interpreter->randomSeed;
+    string rest = trim(line.substr(5));
+    string name, first, second;
+    if (!interpreterParseNameAndBracket(interpreter, rest, &name, &first, &second) || second != "")
+    {
+        fail(&error, lineNumber, "Array declaration must look like: array name[size]");
+        return false;
+    }
+    Value sizeValue;
+    if (!interpreterEvalExpression(interpreter, first, env, lineNumber, &sizeValue))
+    {
+        return false;
+    }
+    if (sizeValue.type != VAL_NUMBER || !isIntegerValue(sizeValue.number))
+    {
+        fail(&error, lineNumber, "Array size must be a whole number.");
+        return false;
+    }
+    envDeclareArray(env, name, (int)sizeValue.number, &error, lineNumber);
+    return !error.failed;
+}
+
+bool interpreterHandleMatrixDeclaration(Interpreter *interpreter, string line, Environment *env, int lineNumber)
+{
+    Program &program = interpreter->program;
+    FunctionDef *funcs = interpreter->funcs;
+    Environment &globals = interpreter->globals;
+    ErrorState &error = interpreter->error;
+    int &callDepth = interpreter->callDepth;
+    int &randomSeed = interpreter->randomSeed;
+    string rest = trim(line.substr(6));
+    string name, first, second;
+    if (!interpreterParseNameAndBracket(interpreter, rest, &name, &first, &second) || second == "")
+    {
+        fail(&error, lineNumber, "Matrix declaration must look like: matrix name[rows][cols]");
+        return false;
+    }
+    Value rowValue, colValue;
+    if (!interpreterEvalExpression(interpreter, first, env, lineNumber, &rowValue) ||
+        !interpreterEvalExpression(interpreter, second, env, lineNumber, &colValue))
+    {
+        return false;
+    }
+    if (rowValue.type != VAL_NUMBER || colValue.type != VAL_NUMBER ||
+        !isIntegerValue(rowValue.number) || !isIntegerValue(colValue.number))
+    {
+        fail(&error, lineNumber, "Matrix dimensions must be whole numbers.");
+        return false;
+    }
+    envDeclareMatrix(env, name, (int)rowValue.number, (int)colValue.number, &error, lineNumber);
+    return !error.failed;
+}
+
+bool interpreterHandleSet(Interpreter *interpreter, string line, Environment *env, int lineNumber)
+{
+    Program &program = interpreter->program;
+    FunctionDef *funcs = interpreter->funcs;
+    Environment &globals = interpreter->globals;
+    ErrorState &error = interpreter->error;
+    int &callDepth = interpreter->callDepth;
+    int &randomSeed = interpreter->randomSeed;
+    string rest = trim(line.substr(3));
+    int eq = interpreterFindTopLevelAssignment(interpreter, rest);
+    if (eq < 0)
+    {
+        fail(&error, lineNumber, "Set statement must look like: set data[index] = value");
+        return false;
+    }
+    string target = trim(rest.substr(0, eq));
+    string expression = trim(rest.substr(eq + 1));
+    string name, first, second;
+    if (!interpreterParseNameAndBracket(interpreter, target, &name, &first, &second))
+    {
+        fail(&error, lineNumber, "Set target must be an array or matrix cell.");
+        return false;
+    }
+    Variable *var = envFindAny(env, name);
+    if (var == NULL)
+    {
+        fail(&error, lineNumber, "Unknown array or matrix '" + name + "'.");
+        return false;
+    }
+    Value newValue;
+    if (!interpreterEvalExpression(interpreter, expression, env, lineNumber, &newValue))
+    {
+        return false;
+    }
+    Value firstValue, secondValue;
+    if (!interpreterEvalExpression(interpreter, first, env, lineNumber, &firstValue))
+    {
+        return false;
+    }
+    if (var->kind == VAR_ARRAY)
+    {
+        if (second != "")
+        {
+            fail(&error, lineNumber, "'" + name + "' is a one-dimensional array.");
+            return false;
+        }
+        int index = interpreterCheckedIndex(interpreter, firstValue, var->rows, lineNumber, "Array");
+        if (index < 0)
+        {
+            return false;
+        }
+        var->cells[index] = newValue;
+        return true;
+    }
+    if (var->kind == VAR_MATRIX)
+    {
+        if (second == "")
+        {
+            fail(&error, lineNumber, "'" + name + "' is a matrix and needs two indexes.");
+            return false;
+        }
+        if (!interpreterEvalExpression(interpreter, second, env, lineNumber, &secondValue))
+        {
+            return false;
+        }
+        int row = interpreterCheckedIndex(interpreter, firstValue, var->rows, lineNumber, "Matrix row");
+        int col = interpreterCheckedIndex(interpreter, secondValue, var->cols, lineNumber, "Matrix column");
+        if (row < 0 || col < 0)
+        {
+            return false;
+        }
+        var->cells[row * var->cols + col] = newValue;
+        return true;
+    }
+    fail(&error, lineNumber, "'" + name + "' is not an array or matrix.");
+    return false;
+}
+
+bool interpreterHandleFileWrite(Interpreter *interpreter, string line, Environment *env, int lineNumber, bool append)
+{
+    Program &program = interpreter->program;
+    FunctionDef *funcs = interpreter->funcs;
+    Environment &globals = interpreter->globals;
+    ErrorState &error = interpreter->error;
+    int &callDepth = interpreter->callDepth;
+    int &randomSeed = interpreter->randomSeed;
+    string rest = trim(line.substr(append ? 10 : 9));
+    int comma = interpreterSplitTopLevelComma(interpreter, rest);
+    if (comma < 0)
+    {
+        fail(&error, lineNumber, string(append ? "fileappend" : "filewrite") + " must look like: command path, value");
+        return false;
+    }
+    Value path, data;
+    if (!interpreterEvalExpression(interpreter, trim(rest.substr(0, comma)), env, lineNumber, &path) ||
+        !interpreterEvalExpression(interpreter, trim(rest.substr(comma + 1)), env, lineNumber, &data))
+    {
+        return false;
+    }
+    string filePath = valueToString(path);
+    ofstream file;
+    if (append)
+    {
+        file.open(filePath.c_str(), ios::app);
+    }
+    else
+    {
+        file.open(filePath.c_str());
+    }
+    if (!file)
+    {
+        fail(&error, lineNumber, "Cannot write to file '" + filePath + "'.");
+        return false;
+    }
+    file << valueToString(data);
+    return true;
+}
+
+ExecResult interpreterExecuteBlock(Interpreter *interpreter, int start, int end, Environment *env)
+{
+    Program &program = interpreter->program;
+    FunctionDef *funcs = interpreter->funcs;
+    Environment &globals = interpreter->globals;
+    ErrorState &error = interpreter->error;
+    int &callDepth = interpreter->callDepth;
+    int &randomSeed = interpreter->randomSeed;
+    ExecResult result;
+    result.hasReturn = false;
+    result.value = makeNull();
+    int loopSteps = 0;
+
+    for (int i = start; i < end && !error.failed; i++)
+    {
+        string line = interpreterCleanLine(interpreter, i);
+        int lineNumber = i + 1;
+        if (line == "")
+        {
+            continue;
+        }
+        if (startsWithWord(line, "func"))
+        {
+            int functionEnd = interpreterFindMatchingEnd(interpreter, i, end);
+            if (functionEnd < 0)
+            {
+                fail(&error, lineNumber, "Function body is missing end.");
+                return result;
+            }
+            i = functionEnd;
+            continue;
+        }
+        if (startsWithWord(line, "let"))
+        {
+            string rest = trim(line.substr(3));
+            int eq = interpreterFindTopLevelAssignment(interpreter, rest);
+            if (eq < 0)
+            {
+                fail(&error, lineNumber, "Let statement must look like: let name = expression");
+                return result;
+            }
+            string name = trim(rest.substr(0, eq));
+            string expression = trim(rest.substr(eq + 1));
+            Value value;
+            if (interpreterEvalExpression(interpreter, expression, env, lineNumber, &value))
+            {
+                envDeclareScalar(env, name, value, &error, lineNumber);
+            }
+            continue;
+        }
+        if (startsWithWord(line, "say") || startsWithWord(line, "print"))
+        {
+            int skip = startsWithWord(line, "say") ? 3 : 5;
+            string expression = trim(line.substr(skip));
+            Value value;
+            if (expression == "")
+            {
+                cout << endl;
+            }
+            else if (interpreterEvalExpression(interpreter, expression, env, lineNumber, &value))
+            {
+                cout << valueToString(value) << endl;
+            }
+            continue;
+        }
+        if (startsWithWord(line, "ask"))
+        {
+            string rest = trim(line.substr(3));
+            int split = 0;
+            while (split < (int)rest.length() && !charIsSpace(rest[split]))
+            {
+                split++;
+            }
+            string name = trim(rest.substr(0, split));
+            string prompt = trim(rest.substr(split));
+            if (!isValidIdentifier(name))
+            {
+                fail(&error, lineNumber, "Ask needs a valid variable name.");
+                return result;
+            }
+            if (prompt != "")
+            {
+                Value promptValue;
+                if (!interpreterEvalExpression(interpreter, prompt, env, lineNumber, &promptValue))
                 {
-                    fail(&error, lineNumber, "Function body is missing end.");
                     return result;
                 }
-                i = functionEnd;
-                continue;
+                cout << valueToString(promptValue);
             }
-            if (startsWithWord(line, "let"))
+            string input;
+            getline(cin, input);
+            envAssignScalar(env, name, makeText(input), &error, lineNumber);
+            continue;
+        }
+        if (startsWithWord(line, "array"))
+        {
+            interpreterHandleArrayDeclaration(interpreter, line, env, lineNumber);
+            continue;
+        }
+        if (startsWithWord(line, "matrix"))
+        {
+            interpreterHandleMatrixDeclaration(interpreter, line, env, lineNumber);
+            continue;
+        }
+        if (startsWithWord(line, "set"))
+        {
+            interpreterHandleSet(interpreter, line, env, lineNumber);
+            continue;
+        }
+        if (startsWithWord(line, "filewrite"))
+        {
+            interpreterHandleFileWrite(interpreter, line, env, lineNumber, false);
+            continue;
+        }
+        if (startsWithWord(line, "fileappend"))
+        {
+            interpreterHandleFileWrite(interpreter, line, env, lineNumber, true);
+            continue;
+        }
+        if (startsWithWord(line, "if"))
+        {
+            string condition = trim(line.substr(2));
+            if (condition == "")
             {
-                string rest = trim(line.substr(3));
-                int eq = findTopLevelAssignment(rest);
-                if (eq < 0)
+                fail(&error, lineNumber, "If statement needs a condition.");
+                return result;
+            }
+            bool hasElse = false;
+            int split = interpreterFindElseOrEnd(interpreter, i, end, &hasElse);
+            if (split < 0)
+            {
+                fail(&error, lineNumber, "If statement is missing end.");
+                return result;
+            }
+            int finalEnd = split;
+            if (hasElse)
+            {
+                finalEnd = interpreterFindMatchingEnd(interpreter, split, end);
+                if (finalEnd < 0)
                 {
-                    fail(&error, lineNumber, "Let statement must look like: let name = expression");
+                    fail(&error, split + 1, "Else block is missing end.");
                     return result;
                 }
-                string name = trim(rest.substr(0, eq));
-                string expression = trim(rest.substr(eq + 1));
-                Value value;
-                if (evalExpression(expression, env, lineNumber, &value))
-                {
-                    env->declareScalar(name, value, &error, lineNumber);
-                }
-                continue;
             }
-            if (startsWithWord(line, "say") || startsWithWord(line, "print"))
+            Value conditionValue;
+            if (!interpreterEvalExpression(interpreter, condition, env, lineNumber, &conditionValue))
             {
-                int skip = startsWithWord(line, "say") ? 3 : 5;
-                string expression = trim(line.substr(skip));
-                Value value;
-                if (expression == "")
-                {
-                    cout << endl;
-                }
-                else if (evalExpression(expression, env, lineNumber, &value))
-                {
-                    cout << valueToString(value) << endl;
-                }
-                continue;
+                return result;
             }
-            if (startsWithWord(line, "ask"))
+            if (isTruthy(conditionValue))
             {
-                string rest = trim(line.substr(3));
-                int split = 0;
-                while (split < (int)rest.length() && !charIsSpace(rest[split]))
+                result = interpreterExecuteBlock(interpreter, i + 1, split, env);
+            }
+            else if (hasElse)
+            {
+                result = interpreterExecuteBlock(interpreter, split + 1, finalEnd, env);
+            }
+            if (result.hasReturn || error.failed)
+            {
+                return result;
+            }
+            i = finalEnd;
+            continue;
+        }
+        if (startsWithWord(line, "while"))
+        {
+            string condition = trim(line.substr(5));
+            if (condition == "")
+            {
+                fail(&error, lineNumber, "While statement needs a condition.");
+                return result;
+            }
+            int blockEnd = interpreterFindMatchingEnd(interpreter, i, end);
+            if (blockEnd < 0)
+            {
+                fail(&error, lineNumber, "While statement is missing end.");
+                return result;
+            }
+            while (!error.failed)
+            {
+                loopSteps++;
+                if (loopSteps > MAX_LOOP_STEPS)
                 {
-                    split++;
-                }
-                string name = trim(rest.substr(0, split));
-                string prompt = trim(rest.substr(split));
-                if (!isValidIdentifier(name))
-                {
-                    fail(&error, lineNumber, "Ask needs a valid variable name.");
+                    fail(&error, lineNumber, "Loop limit reached. Check for an infinite loop.");
                     return result;
-                }
-                if (prompt != "")
-                {
-                    Value promptValue;
-                    if (!evalExpression(prompt, env, lineNumber, &promptValue))
-                    {
-                        return result;
-                    }
-                    cout << valueToString(promptValue);
-                }
-                string input;
-                getline(cin, input);
-                env->assignScalar(name, makeText(input), &error, lineNumber);
-                continue;
-            }
-            if (startsWithWord(line, "array"))
-            {
-                handleArrayDeclaration(line, env, lineNumber);
-                continue;
-            }
-            if (startsWithWord(line, "matrix"))
-            {
-                handleMatrixDeclaration(line, env, lineNumber);
-                continue;
-            }
-            if (startsWithWord(line, "set"))
-            {
-                handleSet(line, env, lineNumber);
-                continue;
-            }
-            if (startsWithWord(line, "filewrite"))
-            {
-                handleFileWrite(line, env, lineNumber, false);
-                continue;
-            }
-            if (startsWithWord(line, "fileappend"))
-            {
-                handleFileWrite(line, env, lineNumber, true);
-                continue;
-            }
-            if (startsWithWord(line, "if"))
-            {
-                string condition = trim(line.substr(2));
-                if (condition == "")
-                {
-                    fail(&error, lineNumber, "If statement needs a condition.");
-                    return result;
-                }
-                bool hasElse = false;
-                int split = findElseOrEnd(i, end, &hasElse);
-                if (split < 0)
-                {
-                    fail(&error, lineNumber, "If statement is missing end.");
-                    return result;
-                }
-                int finalEnd = split;
-                if (hasElse)
-                {
-                    finalEnd = findMatchingEnd(split, end);
-                    if (finalEnd < 0)
-                    {
-                        fail(&error, split + 1, "Else block is missing end.");
-                        return result;
-                    }
                 }
                 Value conditionValue;
-                if (!evalExpression(condition, env, lineNumber, &conditionValue))
+                if (!interpreterEvalExpression(interpreter, condition, env, lineNumber, &conditionValue))
                 {
                     return result;
                 }
-                if (isTruthy(conditionValue))
+                if (!isTruthy(conditionValue))
                 {
-                    result = executeBlock(i + 1, split, env);
+                    break;
                 }
-                else if (hasElse)
-                {
-                    result = executeBlock(split + 1, finalEnd, env);
-                }
+                result = interpreterExecuteBlock(interpreter, i + 1, blockEnd, env);
                 if (result.hasReturn || error.failed)
                 {
                     return result;
                 }
-                i = finalEnd;
-                continue;
             }
-            if (startsWithWord(line, "while"))
-            {
-                string condition = trim(line.substr(5));
-                if (condition == "")
-                {
-                    fail(&error, lineNumber, "While statement needs a condition.");
-                    return result;
-                }
-                int blockEnd = findMatchingEnd(i, end);
-                if (blockEnd < 0)
-                {
-                    fail(&error, lineNumber, "While statement is missing end.");
-                    return result;
-                }
-                while (!error.failed)
-                {
-                    loopSteps++;
-                    if (loopSteps > MAX_LOOP_STEPS)
-                    {
-                        fail(&error, lineNumber, "Loop limit reached. Check for an infinite loop.");
-                        return result;
-                    }
-                    Value conditionValue;
-                    if (!evalExpression(condition, env, lineNumber, &conditionValue))
-                    {
-                        return result;
-                    }
-                    if (!isTruthy(conditionValue))
-                    {
-                        break;
-                    }
-                    result = executeBlock(i + 1, blockEnd, env);
-                    if (result.hasReturn || error.failed)
-                    {
-                        return result;
-                    }
-                }
-                i = blockEnd;
-                continue;
-            }
-            if (startsWithWord(line, "repeat"))
-            {
-                string timesText = trim(line.substr(6));
-                int blockEnd = findMatchingEnd(i, end);
-                if (blockEnd < 0)
-                {
-                    fail(&error, lineNumber, "Repeat statement is missing end.");
-                    return result;
-                }
-                Value countValue;
-                if (!evalExpression(timesText, env, lineNumber, &countValue))
-                {
-                    return result;
-                }
-                if (countValue.type != VAL_NUMBER || !isIntegerValue(countValue.number))
-                {
-                    fail(&error, lineNumber, "Repeat count must be a whole number.");
-                    return result;
-                }
-                int repeatCount = (int)countValue.number;
-                if (repeatCount < 0)
-                {
-                    fail(&error, lineNumber, "Repeat count cannot be negative.");
-                    return result;
-                }
-                for (int count = 0; count < repeatCount && !error.failed; count++)
-                {
-                    loopSteps++;
-                    if (loopSteps > MAX_LOOP_STEPS)
-                    {
-                        fail(&error, lineNumber, "Loop limit reached.");
-                        return result;
-                    }
-                    result = executeBlock(i + 1, blockEnd, env);
-                    if (result.hasReturn || error.failed)
-                    {
-                        return result;
-                    }
-                }
-                i = blockEnd;
-                continue;
-            }
-            if (startsWithWord(line, "return"))
-            {
-                string expression = trim(line.substr(6));
-                if (expression == "")
-                {
-                    result.value = makeNull();
-                }
-                else if (!evalExpression(expression, env, lineNumber, &result.value))
-                {
-                    return result;
-                }
-                result.hasReturn = true;
-                return result;
-            }
-            if (line == "else" || line == "end")
-            {
-                fail(&error, lineNumber, "Unexpected '" + line + "'.");
-                return result;
-            }
-
-            int eq = findTopLevelAssignment(line);
-            if (eq >= 0)
-            {
-                string name = trim(line.substr(0, eq));
-                string expression = trim(line.substr(eq + 1));
-                Value value;
-                if (evalExpression(expression, env, lineNumber, &value))
-                {
-                    env->assignScalar(name, value, &error, lineNumber);
-                }
-                continue;
-            }
-
-            Value unused;
-            evalExpression(line, env, lineNumber, &unused);
+            i = blockEnd;
+            continue;
         }
-        return result;
+        if (startsWithWord(line, "repeat"))
+        {
+            string timesText = trim(line.substr(6));
+            int blockEnd = interpreterFindMatchingEnd(interpreter, i, end);
+            if (blockEnd < 0)
+            {
+                fail(&error, lineNumber, "Repeat statement is missing end.");
+                return result;
+            }
+            Value countValue;
+            if (!interpreterEvalExpression(interpreter, timesText, env, lineNumber, &countValue))
+            {
+                return result;
+            }
+            if (countValue.type != VAL_NUMBER || !isIntegerValue(countValue.number))
+            {
+                fail(&error, lineNumber, "Repeat count must be a whole number.");
+                return result;
+            }
+            int repeatCount = (int)countValue.number;
+            if (repeatCount < 0)
+            {
+                fail(&error, lineNumber, "Repeat count cannot be negative.");
+                return result;
+            }
+            for (int count = 0; count < repeatCount && !error.failed; count++)
+            {
+                loopSteps++;
+                if (loopSteps > MAX_LOOP_STEPS)
+                {
+                    fail(&error, lineNumber, "Loop limit reached.");
+                    return result;
+                }
+                result = interpreterExecuteBlock(interpreter, i + 1, blockEnd, env);
+                if (result.hasReturn || error.failed)
+                {
+                    return result;
+                }
+            }
+            i = blockEnd;
+            continue;
+        }
+        if (startsWithWord(line, "return"))
+        {
+            string expression = trim(line.substr(6));
+            if (expression == "")
+            {
+                result.value = makeNull();
+            }
+            else if (!interpreterEvalExpression(interpreter, expression, env, lineNumber, &result.value))
+            {
+                return result;
+            }
+            result.hasReturn = true;
+            return result;
+        }
+        if (line == "else" || line == "end")
+        {
+            fail(&error, lineNumber, "Unexpected '" + line + "'.");
+            return result;
+        }
+
+        int eq = interpreterFindTopLevelAssignment(interpreter, line);
+        if (eq >= 0)
+        {
+            string name = trim(line.substr(0, eq));
+            string expression = trim(line.substr(eq + 1));
+            Value value;
+            if (interpreterEvalExpression(interpreter, expression, env, lineNumber, &value))
+            {
+                envAssignScalar(env, name, value, &error, lineNumber);
+            }
+            continue;
+        }
+
+        Value unused;
+        interpreterEvalExpression(interpreter, line, env, lineNumber, &unused);
     }
+    return result;
+}
 
-    Value callFunction(string name, Value args[], int argCount, int line)
+Value interpreterCallFunction(Interpreter *interpreter, string name, Value args[], int argCount, int line)
+{
+    Program &program = interpreter->program;
+    FunctionDef *funcs = interpreter->funcs;
+    Environment &globals = interpreter->globals;
+    ErrorState &error = interpreter->error;
+    int &callDepth = interpreter->callDepth;
+    int &randomSeed = interpreter->randomSeed;
+    FunctionDef *function = interpreterFindFunction(interpreter, name);
+    if (function == NULL)
     {
-        FunctionDef *function = findFunction(name);
-        if (function == NULL)
-        {
-            fail(&error, line, "Unknown function '" + name + "'.");
-            return makeNull();
-        }
-        if (argCount != function->paramCount)
-        {
-            fail(&error, line, "Function '" + name + "' expects " + numberToString(function->paramCount) +
-                              " argument(s), got " + numberToString(argCount) + ".");
-            return makeNull();
-        }
-        if (callDepth >= MAX_CALL_DEPTH)
-        {
-            fail(&error, line, "Maximum function call depth reached.");
-            return makeNull();
-        }
-        callDepth++;
-        Environment local(&globals);
-        for (int i = 0; i < argCount; i++)
-        {
-            local.declareScalar(function->params[i], args[i], &error, line);
-        }
-        ExecResult result = executeBlock(function->startLine + 1, function->endLine, &local);
-        callDepth--;
-        if (error.failed)
-        {
-            return makeNull();
-        }
-        if (result.hasReturn)
-        {
-            return result.value;
-        }
+        fail(&error, line, "Unknown function '" + name + "'.");
         return makeNull();
     }
-
-    bool run()
+    if (argCount != function->paramCount)
     {
-        if (!preprocessFunctions())
-        {
-            return false;
-        }
-        executeBlock(0, program.count, &globals);
-        return !error.failed;
+        fail(&error, line, "Function '" + name + "' expects " + numberToString(function->paramCount) +
+                          " argument(s), got " + numberToString(argCount) + ".");
+        return makeNull();
     }
-};
+    if (callDepth >= MAX_CALL_DEPTH)
+    {
+        fail(&error, line, "Maximum function call depth reached.");
+        return makeNull();
+    }
+    callDepth++;
+    Environment local;
+    initEnvironment(&local, &globals);
+    for (int i = 0; i < argCount; i++)
+    {
+        envDeclareScalar(&local, function->params[i], args[i], &error, line);
+    }
+    ExecResult result = interpreterExecuteBlock(interpreter, function->startLine + 1, function->endLine, &local);
+    freeEnvironment(&local);
+    callDepth--;
+    if (error.failed)
+    {
+        return makeNull();
+    }
+    if (result.hasReturn)
+    {
+        return result.value;
+    }
+    return makeNull();
+}
 
-Value ExpressionParser::callBuiltIn(string name, Value args[], int argCount)
+bool interpreterRun(Interpreter *interpreter)
 {
+    Program &program = interpreter->program;
+    FunctionDef *funcs = interpreter->funcs;
+    Environment &globals = interpreter->globals;
+    ErrorState &error = interpreter->error;
+    int &callDepth = interpreter->callDepth;
+    int &randomSeed = interpreter->randomSeed;
+    if (!interpreterPreprocessFunctions(interpreter))
+    {
+        return false;
+    }
+    interpreterExecuteBlock(interpreter, 0, program.count, &globals);
+    return !error.failed;
+}
+
+
+Value parserCallBuiltIn(ExpressionParser *parser, string name, Value args[], int argCount)
+{
+    int &line = parser->line;
+    ErrorState *error = parser->error;
+    Interpreter *interpreter = parser->interpreter;
     if (name == "input")
     {
         if (argCount > 1)
@@ -2207,7 +2418,7 @@ Value ExpressionParser::callBuiltIn(string name, Value args[], int argCount)
             Value linearArgs[2];
             linearArgs[0] = makeNumber(b);
             linearArgs[1] = makeNumber(c);
-            return callBuiltIn("solve_linear", linearArgs, 2);
+            return parserCallBuiltIn(parser, "solve_linear", linearArgs, 2);
         }
         double discriminant = b * b - 4 * a * c;
         if (discriminant < 0)
@@ -2529,32 +2740,37 @@ Value ExpressionParser::callBuiltIn(string name, Value args[], int argCount)
         return makeNumber((double)all.length());
     }
 
-    return interpreter->callFunction(name, args, argCount, line);
+    return interpreterCallFunction(interpreter, name, args, argCount, line);
 }
 
-Value ExpressionParser::parsePrimary()
+Value parserParsePrimary(ExpressionParser *parser)
 {
-    if (matchType(TOK_NUMBER))
+    Token *tokens = parser->tokens;
+    int &pos = parser->pos;
+    int &line = parser->line;
+    ErrorState *error = parser->error;
+    Environment *env = parser->env;
+    if (parserMatchType(parser, TOK_NUMBER))
     {
         return makeNumber(tokens[pos - 1].number);
     }
-    if (matchType(TOK_TEXT))
+    if (parserMatchType(parser, TOK_TEXT))
     {
         return makeText(tokens[pos - 1].text);
     }
-    if (matchType(TOK_LPAREN))
+    if (parserMatchType(parser, TOK_LPAREN))
     {
-        Value value = parseExpression();
-        if (!matchType(TOK_RPAREN))
+        Value value = parserParseExpression(parser);
+        if (!parserMatchType(parser, TOK_RPAREN))
         {
             fail(error, line, "Missing closing parenthesis.");
             return makeNull();
         }
         return value;
     }
-    if (peek().type == TOK_IDENT)
+    if (parserPeek(parser).type == TOK_IDENT)
     {
-        string name = peek().text;
+        string name = parserPeek(parser).text;
         pos++;
         if (name == "true")
         {
@@ -2568,11 +2784,11 @@ Value ExpressionParser::parsePrimary()
         {
             return makeNull();
         }
-        if (matchType(TOK_LPAREN))
+        if (parserMatchType(parser, TOK_LPAREN))
         {
             Value args[MAX_ARGS];
             int argCount = 0;
-            if (!matchType(TOK_RPAREN))
+            if (!parserMatchType(parser, TOK_RPAREN))
             {
                 while (!error->failed)
                 {
@@ -2581,31 +2797,31 @@ Value ExpressionParser::parsePrimary()
                         fail(error, line, "Too many function arguments.");
                         return makeNull();
                     }
-                    args[argCount] = parseExpression();
+                    args[argCount] = parserParseExpression(parser);
                     argCount++;
-                    if (matchType(TOK_RPAREN))
+                    if (parserMatchType(parser, TOK_RPAREN))
                     {
                         break;
                     }
-                    if (!matchType(TOK_COMMA))
+                    if (!parserMatchType(parser, TOK_COMMA))
                     {
                         fail(error, line, "Expected comma or closing parenthesis in argument list.");
                         return makeNull();
                     }
                 }
             }
-            return callBuiltIn(name, args, argCount);
+            return parserCallBuiltIn(parser, name, args, argCount);
         }
-        Variable *var = env->findAny(name);
+        Variable *var = envFindAny(env, name);
         if (var == NULL)
         {
             fail(error, line, "Unknown variable '" + name + "'.");
             return makeNull();
         }
-        if (matchType(TOK_LBRACKET))
+        if (parserMatchType(parser, TOK_LBRACKET))
         {
-            Value first = parseExpression();
-            if (!matchType(TOK_RBRACKET))
+            Value first = parserParseExpression(parser);
+            if (!parserMatchType(parser, TOK_RBRACKET))
             {
                 fail(error, line, "Missing closing bracket.");
                 return makeNull();
@@ -2627,13 +2843,13 @@ Value ExpressionParser::parsePrimary()
             }
             if (var->kind == VAR_MATRIX)
             {
-                if (!matchType(TOK_LBRACKET))
+                if (!parserMatchType(parser, TOK_LBRACKET))
                 {
                     fail(error, line, "Matrix access needs two indexes.");
                     return makeNull();
                 }
-                Value second = parseExpression();
-                if (!matchType(TOK_RBRACKET))
+                Value second = parserParseExpression(parser);
+                if (!parserMatchType(parser, TOK_RBRACKET))
                 {
                     fail(error, line, "Missing closing bracket.");
                     return makeNull();

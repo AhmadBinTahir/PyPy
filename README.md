@@ -20,6 +20,11 @@ PyPy C++ is a small custom programming language interpreter made in C++ for a un
 - Error reporting with line numbers and the original bad source line
 - Example programs for demos, input handling, file storage, and error cases
 - A mini hotel management system written in the custom language
+- C++ implementation kept procedural: simple records plus standalone functions, without OOP-style type definitions
+
+## Developer Documentation
+
+For a complete function-by-function explanation of the C++ source code, see [DEVELOPER_FUNCTION_DOCUMENTATION.md](DEVELOPER_FUNCTION_DOCUMENTATION.md).
 
 ## Project Structure
 
